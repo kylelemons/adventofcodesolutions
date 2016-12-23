@@ -1,10 +1,11 @@
 #!/usr/bin/python2.7
 
-import re
-import itertools
-import functools
-import md5
-import math
+from re import *
+from itertools import *
+from functools import *
+from md5 import *
+from math import *
+from copy import *
 
 def answer():
     pass
