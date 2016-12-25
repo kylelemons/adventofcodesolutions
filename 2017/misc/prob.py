@@ -34,6 +34,11 @@ def answer(m):
             print '{}terminal'.format(prefix)
             return [1 if i == s else 0 for i in xrange(len(m))], 1
 
+        # Recursive states are treated as terminal, and removed from computation later
+        if s in path:
+            print '{}recursive'.format(prefix)
+            return [1 if i == s else 0 for i in xrange(len(m))], 1
+
         # Add the current state to the path (but don't modify the argument)
         path = path + [s]
 
@@ -44,10 +49,10 @@ def answer(m):
         #   ad - target denominator for sum of weighted probabilities
         #   ss - next state
         #   ww - next state's weight
-        wd = sum(v for i, v in enumerate(m[s]) if i not in path)
+        wd = sum(v for i, v in enumerate(m[s]) if path.count(i) < 2)
         n, d, ad = [], [], wd
         for ss, ww in enumerate(m[s]):
-            if ww == 0 or ss in path:
+            if ww == 0:
                 continue
             nn, dd = follow(ss, path)
             n.append([ww*nnn for nnn in nn])
@@ -69,6 +74,13 @@ def answer(m):
         total = [sum(col) for col in izip(*n)]
         debug('column sum', [total], [ad])
 
+        # Subtract out recursive chances to hit this state
+        #   ... basically, assume that the chance that you end up in this state
+        #       is proportional to the rest of the probabilities not counting it
+        if total[s] > 0:
+            ad -= total[s]
+            total[s] = 0
+
         # Reduce the fractions to keep things tidy and in-bounds
         descale = reduce(gcd, total, ad)
         print '{}gcd = {}'.format(prefix, descale)
@@ -87,6 +99,9 @@ tests = [
     (([[0,1,1,0],[1,0,1,2],[0]*4,[0]*4],), [2,1,3]),
     # Self-recursion: two coin flips to choose between 3 options
     (([[1,1,1,1],[0,0,0,0],[0,0,0,0],[0,0,0,0]],), [1,1,1,3]),
+    # Larger tests, including some more difficult recursive cases
+    (([[0, 2, 1, 0, 0], [0, 0, 0, 3, 4], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]],),[7, 6, 8, 21]),
+    (([[0, 1, 0, 0, 0, 1], [4, 0, 0, 3, 2, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]],),[0, 3, 2, 9, 14]),
 ]
 for args, ans in tests:
     got = answer(*args)
