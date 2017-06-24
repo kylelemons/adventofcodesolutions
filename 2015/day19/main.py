@@ -93,14 +93,14 @@ def step2(molecule):
     print molecule
 
     seen = set()
-    q = [(len(molecule), 0, 0, molecule)]
+    q = [(len(molecule), 0, 0, 0, molecule)]
     min_len = len(molecule)
     timeout = 10000
     while len(q) > 0:
         timeout -= 1
         if timeout <= 0:
             return step2(molecule)
-        _, steps, _, mol = heappop(q)
+        _, steps, _, _, mol = heappop(q)
         if len(mol) == 1:
             return steps, mol
         if len(mol) < min_len:
@@ -119,7 +119,7 @@ def step2(molecule):
                     if replaced in seen:
                         continue
                     seen.add(replaced)
-                    heappush(q, (len(replaced), steps+1, randint(0, 1000), replaced))
+                    heappush(q, (len(replaced), steps+1, -start, -end, replaced))
 
 print step2(xfrm("HPMg"))
 print step2(xfrm("NThCaPTiMg"))
