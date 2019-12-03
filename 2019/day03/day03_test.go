@@ -39,7 +39,7 @@ var dirs = map[string]Pos{
 
 func part1(t *testing.T, in string) (dist int) {
 	var wires [][]Move
-	advent.Lines(t, in, func(line string) {
+	advent.Lines(in).Scan(t, func(line string) {
 		var steps []Move
 		for _, step := range strings.Split(line, ",") {
 			var move Move
@@ -78,13 +78,11 @@ func part1(t *testing.T, in string) (dist int) {
 
 func part2(t *testing.T, in string) (dist int) {
 	var wires [][]Move
-	advent.Lines(t, in, func(line string) {
+	advent.Lines(in).Scan(t, func(line string) {
 		var steps []Move
-		for _, step := range strings.Split(line, ",") {
-			var move Move
-			advent.Scanner(step).Extract(t, `([ULDR])(\d+)`, &move.dir, &move.dist)
-			steps = append(steps, move)
-		}
+		advent.Split(line, ',').Extract(t, `([ULDR])(\d+)`, func(dir string, dist int) {
+			steps = append(steps, Move{dir, dist})
+		})
 		wires = append(wires, steps)
 	})
 

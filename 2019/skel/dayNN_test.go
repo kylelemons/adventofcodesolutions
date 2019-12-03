@@ -22,7 +22,7 @@ import (
 )
 
 func part1(t *testing.T, in string) (ret int) {
-	advent.Lines(t, in, func() {
+	advent.Lines(in).Scan(t, func() {
 		// ...
 	})
 	return

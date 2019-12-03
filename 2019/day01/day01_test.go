@@ -40,7 +40,7 @@ func fuel(mass int) int {
 }
 
 func part2(t *testing.T, in string) (total int) {
-	advent.Lines(t, in, func(mass int) {
+	advent.Lines(in).Scan(t, func(mass int) {
 		total += fuel(mass)
 	})
 	return
