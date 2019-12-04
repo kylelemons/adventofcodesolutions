@@ -16,7 +16,6 @@
 package acoday
 
 import (
-	"container/heap"
 	"sort"
 	"strings"
 	"testing"
@@ -72,7 +71,7 @@ func part2(t *testing.T, in string, workers, extraTime int) (ret int) {
 	started := make(map[string]bool)
 
 	var order []string
-	var queue EventHeap
+	var queue advent.PriorityQueue
 	var now int
 	for len(prereq) > 0 {
 		var ready []string
@@ -88,7 +87,7 @@ func part2(t *testing.T, in string, workers, extraTime int) (ret int) {
 			}
 			ready = append(ready, step)
 		}
-		if len(ready) == 0 && len(queue) == 0 {
+		if len(ready) == 0 && queue.Len() == 0 {
 			t.Fatalf("No steps ready; done: %v", done)
 		}
 		sort.Strings(ready)
@@ -97,25 +96,21 @@ func part2(t *testing.T, in string, workers, extraTime int) (ret int) {
 			do := ready[0]
 			started[do] = true
 			end := now + int(do[0]-'A'+1) + extraTime
-			t.Logf("Starting %v at %v", do, now)
-			heap.Push(&queue, TimedEvent{
-				T: end,
-				K: do,
-				F: func() {
-					done[do] = true
-					delete(prereq, do)
-					order = append(order, do)
-					workers++
-				},
-			})
+			queue.Push(func() {
+				done[do] = true
+				delete(prereq, do)
+				order = append(order, do)
+				workers++
+			}, end, do)
 			ready = ready[1:]
 			workers--
 		}
 
-		next := heap.Pop(&queue).(TimedEvent)
-		now = next.T
-		next.F()
-		t.Logf("Finished %v at %v", next.K, now)
+		var next func()
+		var key string
+		queue.Pop(&next, &now, &key)
+		next()
+		t.Logf("Finished %v at %v", key, now)
 	}
 
 	return now
