@@ -77,7 +77,7 @@ func TestPart1(t *testing.T) {
 		want int
 	}{
 		// {"part1 example 0", "...", 0},
-		{"part1 answer", "387638-919123", -1},
+		{"part1 answer", "387638-919123", 466},
 	}
 
 	for _, test := range tests {
@@ -96,7 +96,7 @@ func TestPart2(t *testing.T) {
 		want int
 	}{
 		// {"part2 example 0", "...", 0},
-		{"part2 answer", "387638-919123", -1},
+		{"part2 answer", "387638-919123", 292},
 	}
 
 	for _, test := range tests {
