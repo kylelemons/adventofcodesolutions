@@ -31,19 +31,17 @@ import (
 type Scanner string
 
 // Scan scans the string into the given pointers using fmt.Sscan.
-func (s Scanner) Scan(t *testing.T, ptrs ...interface{}) bool {
+func (s Scanner) Scan(t *testing.T, ptrs ...interface{}) {
 	t.Helper()
 	if _, err := fmt.Sscan(string(s), ptrs...); err != nil {
 		if err == io.EOF {
-			return true
 		}
 		t.Fatalf("Sscan: %s", err)
 	}
-	return true
 }
 
 // Extract extracts sequential capture groups from the scanner into the given pointers.
-func (s Scanner) Extract(t *testing.T, re string, ptrs ...interface{}) bool {
+func (s Scanner) Extract(t *testing.T, re string, ptrs ...interface{}) {
 	t.Helper()
 	r, err := regexp.Compile(re)
 	if err != nil {
@@ -54,7 +52,7 @@ func (s Scanner) Extract(t *testing.T, re string, ptrs ...interface{}) bool {
 	}
 	matches := r.FindStringSubmatch(string(s))
 	if matches == nil {
-		return false
+		t.Fatalf("Input %q does not match /%s/", s, r)
 	}
 	for i, ptr := range ptrs {
 		val := matches[i+1]
@@ -65,7 +63,6 @@ func (s Scanner) Extract(t *testing.T, re string, ptrs ...interface{}) bool {
 			t.Fatalf("failed to scan %q into %T: %s", val, ptr, err)
 		}
 	}
-	return true
 }
 
 // ReadFile reads the named file and returns it as a string.
@@ -130,7 +127,11 @@ func (d *Delimited) Scan(t *testing.T, each interface{}) {
 	fval := reflect.ValueOf(each)
 	pointers, values := inputsFor(fval)
 	for d.Scanner.Scan() {
-		Scanner(d.Scanner.Text()).Scan(t, pointers...)
+		token := d.Scanner.Text()
+		if token == "" {
+			continue
+		}
+		Scanner(token).Scan(t, pointers...)
 		fval.Call(values)
 	}
 }
@@ -143,7 +144,11 @@ func (d *Delimited) Extract(t *testing.T, re string, each interface{}) {
 	fval := reflect.ValueOf(each)
 	pointers, values := inputsFor(fval)
 	for d.Scanner.Scan() {
-		Scanner(d.Scanner.Text()).Extract(t, re, pointers...)
+		token := d.Scanner.Text()
+		if token == "" {
+			continue
+		}
+		Scanner(token).Extract(t, re, pointers...)
 		fval.Call(values)
 	}
 }
