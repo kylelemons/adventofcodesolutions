@@ -17,7 +17,7 @@ func part2(t *testing.T, in string) int {
 	}
 
 	var freq int
-	seen := map[int]bool{}
+	seen := map[int]bool{0: true}
 	for i := 0; i < 1000; i++ {
 		for _, o := range offsets {
 			freq += o

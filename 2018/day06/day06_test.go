@@ -200,7 +200,7 @@ func TestPart2(t *testing.T) {
 3, 4
 5, 5
 8, 9`, 32, 16},
-		{"part2 answer", advent.ReadFile(t, "input.txt"), 10000, -1},
+		{"part2 answer", advent.ReadFile(t, "input.txt"), 10000, 44667},
 	}
 
 	for _, test := range tests {
