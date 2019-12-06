@@ -14,7 +14,7 @@ func TestPart1(t *testing.T) {
 		in   string
 		want string
 	}{
-		{"part1 example", "", ""},
+		{"part1 example", "", "foo"},
 	}
 
 	for _, test := range tests {

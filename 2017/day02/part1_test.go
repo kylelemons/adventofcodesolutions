@@ -43,7 +43,7 @@ func TestPart1(t *testing.T) {
 		{"part1 example", `5 1 9 5
 7 5 3
 2 4 6 8`, 18},
-		{"part1", read(t, "input.txt"), -1},
+		{"part1", read(t, "input.txt"), 58975},
 	}
 
 	for _, test := range tests {
@@ -89,7 +89,7 @@ func TestPart2(t *testing.T) {
 		{"part2 example", `5 9 2 8
 9 4 7 3
 3 8 6 5`, 9},
-		{"part2", read(t, "input.txt"), -1},
+		{"part2", read(t, "input.txt"), 308},
 	}
 
 	for _, test := range tests {
