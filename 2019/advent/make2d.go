@@ -23,3 +23,13 @@ func Make2D(rows, cols int) [][]byte {
 	}
 	return out
 }
+
+// Make2DInts makes a 2d slice of bytes of the given dimensions.
+func Make2DInts(rows, cols int) [][]int {
+	back := make([]int, rows*cols)
+	out := make([][]int, rows)
+	for r := range out {
+		out[r] = back[r*cols:][:cols:cols]
+	}
+	return out
+}
