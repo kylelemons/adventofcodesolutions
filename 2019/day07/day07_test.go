@@ -144,63 +144,23 @@ func (p *Program) Run(t *testing.T) (mem []int) {
 }
 
 func part1(t *testing.T, in string) (ret int) {
-	for i := 0; i < 5; i++ {
-		avail := make([]int, 0, 4)
-		for c := 0; c < 5; c++ {
-			switch c {
-			case i:
-			default:
-				avail = append(avail, c)
-			}
+	advent.Perm(5, func(phases []int) {
+		var ampInput int
+		for amp := 0; amp < 5; amp++ {
+			inputs := []int{phases[amp], ampInput}
+			(&Program{
+				Source: in,
+				Input:  func() (v int) { v, inputs = inputs[0], inputs[1:]; return },
+				Output: func(v int) {
+					ampInput = v
+				},
+			}).Run(t)
 		}
-		for _, j := range avail {
-			avail := make([]int, 0, 3)
-			for c := 0; c < 5; c++ {
-				switch c {
-				case i, j:
-				default:
-					avail = append(avail, c)
-				}
-			}
-			for _, k := range avail {
-				avail := make([]int, 0, 2)
-				for c := 0; c < 5; c++ {
-					switch c {
-					case i, j, k:
-					default:
-						avail = append(avail, c)
-					}
-				}
-				for _, l := range avail {
-					phases := []int{i, j, k, l, 0}
-					for c := 0; c < 5; c++ {
-						switch c {
-						case i, j, k, l:
-						default:
-							phases[4] = c
-						}
-					}
-
-					var ampInput int
-					for amp := 0; amp < 5; amp++ {
-						inputs := []int{phases[amp], ampInput}
-						(&Program{
-							Source: in,
-							Input:  func() (v int) { v, inputs = inputs[0], inputs[1:]; return },
-							Output: func(v int) {
-								ampInput = v
-							},
-						}).Run(t)
-					}
-					if ampInput > ret {
-						ret = ampInput
-						// t.Logf("New best input: %v = %v", phases, ret)
-					}
-
-				}
-			}
+		if ampInput > ret {
+			ret = ampInput
+			// t.Logf("New best input: %v = %v", phases, ret)
 		}
-	}
+	})
 	return
 }
 
@@ -225,83 +185,43 @@ func TestPart1(t *testing.T) {
 }
 
 func part2(t *testing.T, in string) (ret int) {
-	for i := 5; i < 10; i++ {
-		avail := make([]int, 0, 4)
-		for c := 5; c < 10; c++ {
-			switch c {
-			case i:
-			default:
-				avail = append(avail, c)
-			}
+	advent.Perm(5, func(phases []int) {
+		var chans []chan int
+		for c := 0; c < 5; c++ {
+			chans = append(chans, make(chan int, 1))
 		}
-		for _, j := range avail {
-			avail := make([]int, 0, 3)
-			for c := 5; c < 10; c++ {
-				switch c {
-				case i, j:
-				default:
-					avail = append(avail, c)
-				}
-			}
-			for _, k := range avail {
-				avail := make([]int, 0, 2)
-				for c := 5; c < 10; c++ {
-					switch c {
-					case i, j, k:
-					default:
-						avail = append(avail, c)
-					}
-				}
-				for _, l := range avail {
-					phases := []int{i, j, k, l, 0}
-					for c := 5; c < 10; c++ {
-						switch c {
-						case i, j, k, l:
-						default:
-							phases[4] = c
+
+		var wg sync.WaitGroup
+		for amp := 0; amp < 5; amp++ {
+			amp := amp
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				var sentPhase bool
+				(&Program{
+					Source: in,
+					Input: func() (v int) {
+						if !sentPhase {
+							sentPhase = true
+							return phases[amp] + 5
 						}
-					}
-
-					var chans []chan int
-					for c := 0; c < 5; c++ {
-						chans = append(chans, make(chan int, 1))
-					}
-
-					var wg sync.WaitGroup
-					for amp := 0; amp < 5; amp++ {
-						amp := amp
-
-						wg.Add(1)
-						go func() {
-							defer wg.Done()
-							var sentPhase bool
-							(&Program{
-								Source: in,
-								Input: func() (v int) {
-									if !sentPhase {
-										sentPhase = true
-										return phases[amp]
-									}
-									return <-chans[amp]
-								},
-								Output: func(v int) {
-									i := (amp + 1) % len(chans)
-									chans[i] <- v
-								},
-							}).Run(t)
-						}()
-					}
-					chans[0] <- 0
-					wg.Wait()
-					if got := <-chans[0]; got > ret {
-						ret = got
-						// t.Logf("New best input: %v = %v", phases, ret)
-					}
-
-				}
-			}
+						return <-chans[amp]
+					},
+					Output: func(v int) {
+						i := (amp + 1) % len(chans)
+						chans[i] <- v
+					},
+				}).Run(t)
+			}()
 		}
-	}
+		chans[0] <- 0
+		wg.Wait()
+		if got := <-chans[0]; got > ret {
+			ret = got
+			// t.Logf("New best input: %v = %v", phases, ret)
+		}
+	})
 	return
 }
 
