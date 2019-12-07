@@ -72,7 +72,7 @@ func ReadFile(t *testing.T, filename string) string {
 	if err != nil {
 		t.Fatalf("failed to read %q: %s", filename, err)
 	}
-	return strings.TrimSpace(string(data))
+	return strings.TrimRight(string(data), "\n")
 }
 
 // Delimited is a helper for processing delimited inputs.
