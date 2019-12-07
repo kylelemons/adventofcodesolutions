@@ -14,6 +14,11 @@
 
 package advent
 
+import (
+	"bytes"
+	"fmt"
+)
+
 // Make2D makes a 2d slice of bytes of the given dimensions.
 func Make2D(rows, cols int) [][]byte {
 	back := make([]byte, rows*cols)
@@ -30,6 +35,19 @@ func Make2DInts(rows, cols int) [][]int {
 	out := make([][]int, rows)
 	for r := range out {
 		out[r] = back[r*cols:][:cols:cols]
+	}
+	return out
+}
+
+// Split2D splits the string at newlines and ensures it's a rectangle.
+func Split2D(in string) [][]byte {
+	split := bytes.Split([]byte(in), []byte{'\n'})
+	out := make([][]byte, len(split))
+	for i := range split {
+		out[i] = split[i]
+		if got, want := len(out[i]), len(out[0]); got != want {
+			panic(fmt.Sprintf("row %d has length %d, want %d", i, got, want))
+		}
 	}
 	return out
 }
