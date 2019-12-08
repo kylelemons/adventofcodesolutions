@@ -99,7 +99,7 @@ func TestPart2(t *testing.T) {
 		{"part2 example 1", "37", "01245", 5},
 		{"part2 example 2", "37", "92510", 18},
 		{"part2 example 3", "37", "59414", 2018},
-		{"part2 answer", "37", "513401", -1},
+		{"part2 answer", "37", "513401", 20286858},
 	}
 
 	for _, test := range tests {
