@@ -16,7 +16,6 @@
 package acoday
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"testing"
@@ -43,6 +42,9 @@ func (c Coord) Sub(c0 Coord) int {
 	}
 	return dr + dc
 }
+
+// CoordDeltas represent adjacent coordinates in reading order.
+var CoordDeltas = []Coord{{-1, 0}, {0, -1}, {0, 1}, {1, 0}}
 
 type byReadingOrder []Coord
 
@@ -79,167 +81,244 @@ func (a byLoc) Less(i, j int) bool {
 	return false
 }
 
-func part1(t *testing.T, in string) (ret int) {
-	const (
-		DefaultHP = 200
-		DefaultAP = 3
-	)
+// Map represents the current state of the Day 15 simulation.
+type Map struct {
+	At     [][]byte
+	Units  map[Coord]*Unit
+	Deaths []*Unit
+}
 
-	field := advent.Split2D(in)
+// NewMap creates a Map for running the Day 15 simulation.
+func NewMap(in string, goblinAP, elfAP int) *Map {
+	const DefaultHP = 200
 
-	units := make(map[Coord]*Unit)
-	move := func(u *Unit, to Coord) {
-		delete(units, u.Loc)
-		u.Loc = to
-		units[u.Loc] = u
+	m := &Map{
+		At:    advent.Split2D(in),
+		Units: make(map[Coord]*Unit),
 	}
 
-	for r := range field {
-		for c := range field[r] {
-			switch field[r][c] {
+	// Pull the units out of the map and into the Units field.
+	for r := range m.At {
+		for c := range m.At[r] {
+			switch m.At[r][c] {
 			case '#': // wall
 			case '.': // floor
-			case 'G', 'E': // unit
-				units[Coord{r, c}] = &Unit{
-					Kind: field[r][c],
+			case 'G': // unit
+				m.Units[Coord{r, c}] = &Unit{
+					Kind: m.At[r][c],
 					HP:   DefaultHP,
-					AP:   DefaultAP,
+					AP:   goblinAP,
 					Loc:  Coord{r, c},
 				}
-				field[r][c] = '.'
+				m.At[r][c] = '.'
+			case 'E': // unit
+				m.Units[Coord{r, c}] = &Unit{
+					Kind: m.At[r][c],
+					HP:   DefaultHP,
+					AP:   elfAP,
+					Loc:  Coord{r, c},
+				}
+				m.At[r][c] = '.'
 			}
 		}
 	}
 
-	for round := 0; round < 1e6; round++ {
-		ready := make([]*Unit, 0, len(units))
-		for _, u := range units {
+	return m
+}
+
+// Move moves the given unit to the given coordinate.
+func (m *Map) Move(u *Unit, to Coord) {
+	delete(m.Units, u.Loc)
+	u.Loc = to
+	m.Units[u.Loc] = u
+}
+
+func (m *Map) Attack(u *Unit, attackable []*Unit) {
+	if len(attackable) == 0 {
+		return
+	}
+
+	// Sort by attack preference.
+	sort.Slice(attackable, func(i, j int) bool {
+		// First, sort by HP
+		if a, b := attackable[i].HP, attackable[j].HP; a != b {
+			return a < b
+		}
+		// Then sort by direction
+		if a, b := attackable[i].Loc.R, attackable[j].Loc.R; a != b {
+			return a < b
+		}
+		if a, b := attackable[i].Loc.C, attackable[j].Loc.C; a != b {
+			return a < b
+		}
+		return false
+	})
+
+	// Attack the preferred unit.
+	target := attackable[0]
+	target.HP -= u.AP
+	if target.HP <= 0 {
+		delete(m.Units, target.Loc)
+		m.Deaths = append(m.Deaths, target)
+	}
+}
+
+// NextMove performs a breadth-first-search outward from u until it hits one or
+// more destination in the map, chooses the preferred destination, and returns
+// the preferred first step to get there.
+func (m *Map) NextMove(u *Unit, dest map[Coord]bool) Coord {
+	// Our BFS needs the current location and the path to get there.
+	type state struct {
+		loc  Coord
+		path []Coord
+	}
+
+	// Initialize the BFS with the current location.
+	q := []state{{loc: u.Loc}}
+
+	// Track visited locations so we don't do extra work or get into cycles.
+	visited := make(map[Coord]bool)
+
+	// If we get to a distance where we start finding destinations, collect them
+	// so that we can determine which one is preferred.
+	var best []state
+
+	// Run the BFS in chunks, so that we consider all destionations a certain
+	// number of steps away together.
+	//
+	// The BFS stops when we run out of places to try (in q) or we find paths to
+	// destinations (best).
+	for steps := 0; len(best) == 0 && len(q) > 0; steps++ {
+		next := make([]state, 0, 4*len(q))
+		for _, cur := range q {
+			if visited[cur.loc] {
+				continue
+			}
+			visited[cur.loc] = true
+
+			// Move from the current location to each of the adjacent spaces.
+			for _, d := range CoordDeltas {
+				c := cur.loc.Add(d)
+				if m.At[c.R][c.C] != '.' { // wall
+					continue
+				}
+				if _, ok := m.Units[c]; ok { // already occupied
+					continue
+				}
+
+				// Store the next state.
+				//
+				// Note that the path limts the capacity so that states never
+				// overwrite one another's backing storage.
+				s := state{
+					loc:  c,
+					path: append(cur.path[:len(cur.path):len(cur.path)], c),
+				}
+				next = append(next, s)
+
+				// If we've found a destination, our BFS is over, but we may not
+				// be at the first "reading order" destination, so we collect
+				// all of them and then sort later.
+				if dest[c] {
+					best = append(best, s)
+				}
+			}
+		}
+		q = next
+	}
+	if len(best) == 0 {
+		// Nobody is reachable, stay put.
+		return u.Loc
+	}
+
+	// Pick the best path based on reading order of destination and first step.
+	sort.Slice(best, func(i, j int) bool {
+		// First, sort by destination
+		if a, b := best[i].loc.R, best[j].loc.R; a != b {
+			return a < b
+		}
+		if a, b := best[i].loc.C, best[j].loc.C; a != b {
+			return a < b
+		}
+		// Then sort by first step
+		if a, b := best[i].path[0].R, best[j].path[0].R; a != b {
+			return a < b
+		}
+		if a, b := best[i].path[0].C, best[j].path[0].C; a != b {
+			return a < b
+		}
+		return false
+	})
+
+	// The best step is the first one in the first path.
+	return best[0].path[0]
+}
+
+func (m *Map) Combat() (rounds, goblinHP, elfHP int) {
+	for round := 0; ; round++ {
+		// Figure out the order in which units are going to act.
+		ready := make([]*Unit, 0, len(m.Units))
+		for _, u := range m.Units {
 			ready = append(ready, u)
 		}
-		sort.Sort(byLoc(ready))
+		sort.Sort(byLoc(ready)) // sorted in "reading" order
+
+		// Make each unit act in order (unless they are killed first).
 		for _, u := range ready {
 			if u.HP <= 0 {
 				continue
 			}
 
-			attackable := make([]*Unit, 0, len(units))
-			dest := make(map[Coord]bool, 4*len(units))
+			// Store attackable units and potential destinations.
+			attackable := make([]*Unit, 0, len(m.Units))
+			dest := make(map[Coord]bool, 4*len(m.Units))
+
+			// Count the enemies we see, in case combat ends.
 			var enemies int
-			for _, e := range units {
+
+			// Find enemy units
+			for _, e := range m.Units {
 				if e.Kind == u.Kind {
 					continue // not an enemy
 				}
 				enemies++
+
+				// Check if the enemy is close enough to attack directly.
 				if e.Loc.Sub(u.Loc) == 1 {
 					attackable = append(attackable, e)
 					continue
 				}
-				for _, d := range []Coord{{-1, 0}, {0, -1}, {0, 1}, {1, 0}} {
+
+				// Collect squares we can stand in to attack this enemy.
+				for _, d := range CoordDeltas {
 					c := e.Loc.Add(d)
-					if field[c.R][c.C] != '.' {
+					if m.At[c.R][c.C] != '.' { // wall
 						continue
 					}
-					if _, ok := units[c]; ok {
+					if _, ok := m.Units[c]; ok { // occupied already
 						continue
 					}
 					dest[c] = true
 				}
 			}
-			attack := func() {
-				sort.Slice(attackable, func(i, j int) bool {
-					// First, sort by HP
-					if a, b := attackable[i].HP, attackable[j].HP; a != b {
-						return a < b
-					}
-					// Then sort by direction
-					if a, b := attackable[i].Loc.R, attackable[j].Loc.R; a != b {
-						return a < b
-					}
-					if a, b := attackable[i].Loc.C, attackable[j].Loc.C; a != b {
-						return a < b
-					}
-					return false
-				})
-				target := attackable[0]
-				target.HP -= u.AP
-				if target.HP <= 0 {
-					delete(units, target.Loc)
-				}
-			}
 			if enemies == 0 {
 				// No enemies, we're done
-				for _, u := range units {
-					ret += u.HP
+				for _, u := range m.Units {
+					switch u.Kind {
+					case 'G':
+						goblinHP += u.HP
+					case 'E':
+						elfHP += u.HP
+					}
 				}
-				return ret * round
+				return round, goblinHP, elfHP
 			} else if len(attackable) > 0 {
-				attack()
+				m.Attack(u, attackable)
 			} else if len(dest) > 0 {
-				type state struct {
-					loc  Coord
-					path []Coord
-				}
-				q := []state{{loc: u.Loc}}
-				visited := make(map[Coord]bool)
-				var best []state
-				for steps := 0; len(best) == 0 && len(q) > 0; steps++ {
-					// fmt.Printf("Round %d: %+v: Step %d: %d starts\n", round, u, steps, len(q))
-					next := make([]state, 0, 4*len(q))
-					for _, cur := range q {
-						if visited[cur.loc] {
-							continue
-						}
-						visited[cur.loc] = true
-					nextDir:
-						for _, d := range []Coord{{-1, 0}, {0, -1}, {0, 1}, {1, 0}} {
-							c := cur.loc.Add(d)
-							if field[c.R][c.C] != '.' {
-								continue
-							}
-							if _, ok := units[c]; ok {
-								continue
-							}
-							for _, prev := range cur.path {
-								if prev == c {
-									continue nextDir
-								}
-							}
-							s := state{
-								loc:  c,
-								path: append(cur.path[:len(cur.path):len(cur.path)], c),
-							}
-							next = append(next, s)
-							if dest[c] {
-								best = append(best, s)
-							}
-						}
-					}
-					q = next
-				}
-				if len(best) == 0 {
-					continue // no enemies reachable
-				}
-				sort.Slice(best, func(i, j int) bool {
-					// First, sort by destination
-					if a, b := best[i].loc.R, best[j].loc.R; a != b {
-						return a < b
-					}
-					if a, b := best[i].loc.C, best[j].loc.C; a != b {
-						return a < b
-					}
-					// Then sort by first step
-					if a, b := best[i].path[0].R, best[j].path[0].R; a != b {
-						return a < b
-					}
-					if a, b := best[i].path[0].C, best[j].path[0].C; a != b {
-						return a < b
-					}
-					return false
-				})
-				move(u, best[0].path[0])
-				for _, d := range []Coord{{-1, 0}, {0, -1}, {0, 1}, {1, 0}} {
+				m.Move(u, m.NextMove(u, dest))
+				for _, d := range CoordDeltas {
 					c := u.Loc.Add(d)
-					e, ok := units[c]
+					e, ok := m.Units[c]
 					if !ok {
 						continue
 					}
@@ -248,33 +327,16 @@ func part1(t *testing.T, in string) (ret int) {
 					}
 					attackable = append(attackable, e)
 				}
-				if len(attackable) > 0 {
-					attack()
-				}
+				m.Attack(u, attackable)
 			}
 		}
-
-		// if round < 50 {
-		// } else if round < 100 {
-		// 	fmt.Printf("Finished round %d\n", round)
-		// } else {
-		// 	fmt.Printf("After %d round(s):\n", round+1)
-		// 	for r := range field {
-		// 		hp := ""
-		// 		for c := range field[r] {
-		// 			if u, ok := units[Coord{r, c}]; ok {
-		// 				fmt.Printf("%c", u.Kind)
-		// 				hp += fmt.Sprintf(" %c:%d", u.Kind, u.HP)
-		// 				continue
-		// 			}
-		// 			fmt.Printf("%c", field[r][c])
-		// 		}
-		// 		fmt.Printf("%s\n", hp)
-		// 	}
-		// 	fmt.Println()
-		// }
 	}
-	panic("round limit exceeded")
+}
+
+func part1(t *testing.T, in string) (ret int) {
+	m := NewMap(in, 3, 3)
+	rounds, goblinHP, elfHP := m.Combat()
+	return (goblinHP + elfHP) * rounds
 }
 
 func TestPart1(t *testing.T) {
@@ -342,219 +404,21 @@ func TestPart1(t *testing.T) {
 }
 
 func part2(t *testing.T, in string) (ret int) {
-	const (
-		DefaultHP = 200
-		DefaultAP = 3
-	)
+moreAP:
+	for elfAP := 3; ; elfAP++ {
+		m := NewMap(in, 3, elfAP)
+		rounds, _, elfHP := m.Combat()
 
-	var ElfAP = 2
-tryAgain:
-
-	field := advent.Split2D(in)
-
-	units := make(map[Coord]*Unit)
-	move := func(u *Unit, to Coord) {
-		delete(units, u.Loc)
-		u.Loc = to
-		units[u.Loc] = u
-	}
-
-	var elves int
-	for r := range field {
-		for c := range field[r] {
-			switch field[r][c] {
-			case '#': // wall
-			case '.': // floor
-			case 'G', 'E': // unit
-				ap := DefaultAP
-				if field[r][c] == 'E' {
-					ap = ElfAP
-					elves++
-				}
-				units[Coord{r, c}] = &Unit{
-					Kind: field[r][c],
-					HP:   DefaultHP,
-					AP:   ap,
-					Loc:  Coord{r, c},
-				}
-				field[r][c] = '.'
+		// If any elves died, try again with more AP.
+		for _, death := range m.Deaths {
+			if death.Kind == 'E' {
+				continue moreAP
 			}
 		}
-	}
-	debug := func() string {
-		out := new(strings.Builder)
-		for r := range field {
-			hp := ""
-			for c := range field[r] {
-				if u, ok := units[Coord{r, c}]; ok {
-					fmt.Fprintf(out, "%c", u.Kind)
-					hp += fmt.Sprintf(" %c:%d", u.Kind, u.HP)
-					continue
-				}
-				fmt.Fprintf(out, "%c", field[r][c])
-			}
-			fmt.Fprintf(out, "%s\n", hp)
-		}
-		return out.String()
-	}
 
-	for round := 0; round < 1e6; round++ {
-		ready := make([]*Unit, 0, len(units))
-		for _, u := range units {
-			ready = append(ready, u)
-		}
-		sort.Sort(byLoc(ready))
-		for _, u := range ready {
-			if u.HP <= 0 {
-				continue
-			}
-
-			attackable := make([]*Unit, 0, len(units))
-			dest := make(map[Coord]bool, 4*len(units))
-			var enemies int
-			for _, e := range units {
-				if e.Kind == u.Kind {
-					continue // not an enemy
-				}
-				enemies++
-				if e.Loc.Sub(u.Loc) == 1 {
-					attackable = append(attackable, e)
-					continue
-				}
-				for _, d := range []Coord{{-1, 0}, {0, -1}, {0, 1}, {1, 0}} {
-					c := e.Loc.Add(d)
-					if field[c.R][c.C] != '.' {
-						continue
-					}
-					if _, ok := units[c]; ok {
-						continue
-					}
-					dest[c] = true
-				}
-			}
-			attack := func() {
-				sort.Slice(attackable, func(i, j int) bool {
-					// First, sort by HP
-					if a, b := attackable[i].HP, attackable[j].HP; a != b {
-						return a < b
-					}
-					// Then sort by direction
-					if a, b := attackable[i].Loc.R, attackable[j].Loc.R; a != b {
-						return a < b
-					}
-					if a, b := attackable[i].Loc.C, attackable[j].Loc.C; a != b {
-						return a < b
-					}
-					return false
-				})
-				target := attackable[0]
-				target.HP -= u.AP
-				if target.HP <= 0 {
-					delete(units, target.Loc)
-				}
-			}
-			if enemies == 0 {
-				// No enemies, we're done
-				hp := 0
-				for _, u := range units {
-					// If the last enemy is a goblin, try again
-					if u.Kind == 'G' {
-						ElfAP++
-						t.Logf("Goblins win; Increasing Elf AP to %d", ElfAP)
-						goto tryAgain
-					}
-					hp += u.HP
-				}
-				if len(units) < elves {
-					ElfAP++
-					t.Logf("Lost elves; Increasing Elf AP to %d", ElfAP)
-					goto tryAgain
-				}
-				t.Logf("Elves win with %d total HP left after %d full rounds:\n%s", hp, round, debug())
-				return hp * round
-			} else if len(attackable) > 0 {
-				attack()
-			} else if len(dest) > 0 {
-				type state struct {
-					loc  Coord
-					path []Coord
-				}
-				q := []state{{loc: u.Loc}}
-				visited := make(map[Coord]bool)
-				var best []state
-				for steps := 0; len(best) == 0 && len(q) > 0; steps++ {
-					// fmt.Printf("Round %d: %+v: Step %d: %d starts\n", round, u, steps, len(q))
-					next := make([]state, 0, 4*len(q))
-					for _, cur := range q {
-						if visited[cur.loc] {
-							continue
-						}
-						visited[cur.loc] = true
-					nextDir:
-						for _, d := range []Coord{{-1, 0}, {0, -1}, {0, 1}, {1, 0}} {
-							c := cur.loc.Add(d)
-							if field[c.R][c.C] != '.' {
-								continue
-							}
-							if _, ok := units[c]; ok {
-								continue
-							}
-							for _, prev := range cur.path {
-								if prev == c {
-									continue nextDir
-								}
-							}
-							s := state{
-								loc:  c,
-								path: append(cur.path[:len(cur.path):len(cur.path)], c),
-							}
-							next = append(next, s)
-							if dest[c] {
-								best = append(best, s)
-							}
-						}
-					}
-					q = next
-				}
-				if len(best) == 0 {
-					continue // no enemies reachable
-				}
-				sort.Slice(best, func(i, j int) bool {
-					// First, sort by destination
-					if a, b := best[i].loc.R, best[j].loc.R; a != b {
-						return a < b
-					}
-					if a, b := best[i].loc.C, best[j].loc.C; a != b {
-						return a < b
-					}
-					// Then sort by first step
-					if a, b := best[i].path[0].R, best[j].path[0].R; a != b {
-						return a < b
-					}
-					if a, b := best[i].path[0].C, best[j].path[0].C; a != b {
-						return a < b
-					}
-					return false
-				})
-				move(u, best[0].path[0])
-				for _, d := range []Coord{{-1, 0}, {0, -1}, {0, 1}, {1, 0}} {
-					c := u.Loc.Add(d)
-					e, ok := units[c]
-					if !ok {
-						continue
-					}
-					if u.Kind == e.Kind {
-						continue
-					}
-					attackable = append(attackable, e)
-				}
-				if len(attackable) > 0 {
-					attack()
-				}
-			}
-		}
+		// No elves died, we're good.
+		return elfHP * rounds
 	}
-	panic("round limit exceeded")
 }
 
 func TestPart2(t *testing.T) {
