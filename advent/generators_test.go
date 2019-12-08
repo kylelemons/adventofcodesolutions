@@ -28,7 +28,14 @@ func TestPerm(t *testing.T) {
 		v []string
 	}{
 		{
+			n: -1,
+			v: nil,
+		},
+		{
 			n: 0,
+			v: []string{
+				"[]",
+			},
 		},
 		{
 			n: 1,
@@ -61,13 +68,37 @@ func TestPerm(t *testing.T) {
 }
 
 func BenchmarkPerm(b *testing.B) {
-	for _, n := range ([]int{0,1,3,5,7,10}) {
+	for _, n := range []int{0, 1, 3, 5, 7, 10} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			var total int
 			for i := 0; i < b.N; i++ {
-				Perm(n, func(v []int){total += v[0]})
+				Perm(n, func(v []int) { total += v[0] })
 			}
 			_ = total
 		})
 	}
+}
+
+func ExamplePerm() {
+	colors := []string{
+		"red",
+		"blue",
+		"green",
+	}
+	Perm(len(colors), func(idx []int) {
+		var comma string
+		for _, i := range idx {
+			fmt.Printf("%s%s", comma, colors[i])
+			comma = ", "
+		}
+		fmt.Println()
+	})
+
+	// Output:
+	// red, blue, green
+	// blue, red, green
+	// green, red, blue
+	// red, green, blue
+	// blue, green, red
+	// green, blue, red
 }
