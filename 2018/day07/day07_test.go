@@ -20,7 +20,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kylelemons/adventofcodesolutions/2019/advent"
+	"github.com/kylelemons/adventofcodesolutions/advent"
 )
 
 func parse(t *testing.T, in string) map[string][]string {

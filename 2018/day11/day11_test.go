@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/kylelemons/adventofcodesolutions/2019/advent"
+	"github.com/kylelemons/adventofcodesolutions/advent"
 )
 
 type coord struct{ x, y int }

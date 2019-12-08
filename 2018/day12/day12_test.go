@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kylelemons/adventofcodesolutions/2019/advent"
+	"github.com/kylelemons/adventofcodesolutions/advent"
 )
 
 func part1(t *testing.T, inState, inTrans string, generations int) (ret int) {

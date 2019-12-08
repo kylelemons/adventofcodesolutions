@@ -18,7 +18,7 @@ package acoday
 import (
 	"testing"
 
-	"github.com/kylelemons/adventofcodesolutions/2019/advent"
+	"github.com/kylelemons/adventofcodesolutions/advent"
 )
 
 func part1(t *testing.T, in string) (ret int) {

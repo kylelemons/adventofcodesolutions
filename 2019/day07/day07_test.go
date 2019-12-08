@@ -21,7 +21,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/kylelemons/adventofcodesolutions/2019/advent"
+	"github.com/kylelemons/adventofcodesolutions/advent"
 )
 
 // A Program is an executable instruction with the 2019 instruction set.
