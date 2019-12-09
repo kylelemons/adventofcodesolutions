@@ -21,10 +21,25 @@ import (
 	"github.com/kylelemons/adventofcodesolutions/advent"
 )
 
-func part1(t *testing.T, in string) (ret int) {
-	advent.Lines(in).Scan(t, func() {
+type Input struct {
+	// ...
+}
+
+func parseInput(t *testing.T, in string) *Input {
+	input := &Input{
+		// ...
+	}
+	advent.Lines(in).Extract(t, `([xy])=(-?\d+), ([xy])=(-?\d+)..(-?\d+)`, func(dimA string, valA int, dimB string, minB, maxB int) {
 		// ...
 	})
+	return input
+}
+
+func part1(t *testing.T, in string) (ret int) {
+	input := parseInput(t, in)
+
+	_ = input
+
 	return
 }
 
