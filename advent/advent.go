@@ -43,6 +43,19 @@ func (s Scanner) Scan(t *testing.T, ptrs ...interface{}) {
 // Extract extracts sequential capture groups from the scanner into the given pointers.
 func (s Scanner) Extract(t *testing.T, re string, ptrs ...interface{}) {
 	t.Helper()
+	if !s.CanExtract(t, re, ptrs...) {
+		t.Fatalf("Input %q does not match /%s/", s, re)
+	}
+}
+
+// CanExtract returns true if it can extract sequential capture groups from the
+// scanner into the given pointers.
+//
+// CanExtact returns true if the line is fully scanned, false if the regex does
+// not match, and will fatal out if the regex is invalid or if a matched value
+// cannot be correctly stored.
+func (s Scanner) CanExtract(t *testing.T, re string, ptrs ...interface{}) bool {
+	t.Helper()
 	r, err := regexp.Compile(re)
 	if err != nil {
 		t.Fatalf("bad regexp %q: %s", re, err)
@@ -52,7 +65,7 @@ func (s Scanner) Extract(t *testing.T, re string, ptrs ...interface{}) {
 	}
 	matches := r.FindStringSubmatch(string(s))
 	if matches == nil {
-		t.Fatalf("Input %q does not match /%s/", s, r)
+		return false
 	}
 	for i, ptr := range ptrs {
 		val := matches[i+1]
@@ -63,6 +76,7 @@ func (s Scanner) Extract(t *testing.T, re string, ptrs ...interface{}) {
 			t.Fatalf("failed to scan %q into %T: %s", val, ptr, err)
 		}
 	}
+	return true
 }
 
 // ReadFile reads the named file and returns it as a string.
@@ -119,21 +133,32 @@ func Split(input string, delim rune) *Delimited {
 	})
 }
 
+// Each calls f for each successive non-empty token with the token index and
+// a scanner to use in parsing the token.
+func (d *Delimited) Each(each func(i int, token Scanner)) {
+	for i := 0; d.Scanner.Scan(); {
+		token := d.Scanner.Text()
+		if token == "" {
+			continue
+		}
+		each(i, Scanner(token))
+		i++
+	}
+}
+
 // Scan calls Scanner.Scan on each item to provide inputs to the each function.
 //
 // Example:
 //   advent.Lines(input).Scan(t, func(command string, arg int) { ... })
 func (d *Delimited) Scan(t *testing.T, each interface{}) {
+	t.Helper()
+
 	fval := reflect.ValueOf(each)
 	pointers, values := inputsFor(fval)
-	for d.Scanner.Scan() {
-		token := d.Scanner.Text()
-		if token == "" {
-			continue
-		}
-		Scanner(token).Scan(t, pointers...)
+	d.Each(func(_ int, token Scanner) {
+		token.Scan(t, pointers...)
 		fval.Call(values)
-	}
+	})
 }
 
 // Extract calls Scanner.Extract on each item to provide inputs to the each function.
@@ -141,18 +166,19 @@ func (d *Delimited) Scan(t *testing.T, each interface{}) {
 // Example:
 //   advent.Lines(input).Extract(t, input, `([ULDR])(\d+)`, func(dir string, steps int) { ... })
 func (d *Delimited) Extract(t *testing.T, re string, each interface{}) {
+	t.Helper()
+
 	fval := reflect.ValueOf(each)
 	pointers, values := inputsFor(fval)
-	for d.Scanner.Scan() {
-		token := d.Scanner.Text()
-		if token == "" {
-			continue
-		}
-		Scanner(token).Extract(t, re, pointers...)
+	d.Each(func(_ int, token Scanner) {
+		token.Extract(t, re, pointers...)
 		fval.Call(values)
-	}
+	})
 }
 
+// inputsFor returns two slices based on the given reflective function value:
+//  - a []interface{} for passing to fmt.Scan* corresponding 1:1 to params
+//  - a []reflect.Value for calling the fval function with the internal params
 func inputsFor(fval reflect.Value) (scanInputs []interface{}, callInputs []reflect.Value) {
 	var values, pointers []reflect.Value
 	var rawPointers []interface{}
@@ -165,4 +191,14 @@ func inputsFor(fval reflect.Value) (scanInputs []interface{}, callInputs []refle
 		rawPointers = append(rawPointers, ptr.Interface())
 	}
 	return rawPointers, values
+}
+
+// Fields returns pointers to the slice's fields in source order, suitable for
+// passing to Scan, Extract, or CanExtract.
+func Fields(structPtr interface{}) (fieldPtrs []interface{}) {
+	v := reflect.ValueOf(structPtr).Elem()
+	for i, n := 0, v.Type().NumField(); i < n; i++ {
+		fieldPtrs = append(fieldPtrs, v.Field(i).Addr().Interface())
+	}
+	return
 }
