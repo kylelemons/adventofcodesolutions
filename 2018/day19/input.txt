@@ -1,0 +1,37 @@
+#ip 3
+addi 3 16 3 # [ 0] pc += 16       -> :a
+seti 1 6 1  # [ 1] r1  = 1        <- :z                 # Inner loop
+seti 1 4 5  # [ 2] r5  = 1        <- :q                 # Outer loop 
+mulr 1 5 4  # [ 3] r4  = r1  * r5 <- :e
+eqrr 4 2 4  # [ 4] r4  = r4 == r2
+addr 4 3 3  # [ 5] pc += r4       -> :b IF r2 == r4
+addi 3 1 3  # [ 6] pc += 1        -> :c
+addr 1 0 0  # [ 7] r0 += r1       <- :b                 # r0 is summing values where r2 == r4
+addi 5 1 5  # [ 8] r5 += 1        <- :c
+gtrr 5 2 4  # [ 9] r4  = r5 > r2
+addr 3 4 3  # [10] pc += r4       -> :f IF r5  > r2
+seti 2 6 3  # [12] pc  = 2        -> :e IF r5 <= r2
+addi 1 1 1  # [13] r1 += 1        <- :f
+gtrr 1 2 4  # [14] r4  = r1 > r2
+addr 4 3 3  # [15] pc += r4       -> :d if r1  > r2
+seti 1 1 3  # [16] pc  = 1        -> :q                 # Outer loop
+mulr 3 3 3  # [17] pc *= pc       <- :d                 # This probably exits the program (pc *= pc) when r1 (counter1) > r2 (counter2)
+addi 2 2 2  # [18] r2 = r2 + 2    <- :a
+mulr 2 2 2
+mulr 3 2 2
+muli 2 11 2
+addi 4 8 4
+mulr 4 3 4
+addi 4 12 4
+addr 2 4 2
+addr 3 0 3  # pc += r0
+seti 0 2 3  # pc  = 1  -> :z
+setr 3 9 4
+mulr 4 3 4
+addr 3 4 4
+mulr 3 4 4
+muli 4 14 4
+mulr 4 3 4
+addr 2 4 2
+seti 0 4 0
+seti 0 3 3  # pc = 0 -> :z
