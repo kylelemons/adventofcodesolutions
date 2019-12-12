@@ -23,6 +23,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/kylelemons/adventofcodesolutions/advent"
+	"github.com/kylelemons/adventofcodesolutions/advent/coords"
 )
 
 // A Program is an executable instruction with the 2019 instruction set.
@@ -156,12 +157,10 @@ func (p *Program) Run(t *testing.T) (mem []int) {
 	}
 }
 
-type Coord struct{ R, C int }
-
-func run(t *testing.T, in string, start int) (rr, cc advent.RangeTracker, ret map[Coord]int) {
-	m := map[Coord]int{}
-	cur := Coord{0, 0}
-	dir := '^'
+func run(t *testing.T, in string, start int) (rr, cc advent.RangeTracker, ret map[coords.Coord]int) {
+	m := map[coords.Coord]int{}
+	cur := coords.Coord{}
+	dir := coords.North
 	m[cur] = start
 
 	var turn bool
@@ -170,42 +169,21 @@ func run(t *testing.T, in string, start int) (rr, cc advent.RangeTracker, ret ma
 		Input:  func() int { return m[cur] },
 		Output: func(v int) {
 			if turn {
-				switch {
-				case dir == '^' && v == 0:
-					dir = '<'
-				case dir == '^' && v == 1:
-					dir = '>'
-				case dir == '>' && v == 0:
-					dir = '^'
-				case dir == '>' && v == 1:
-					dir = 'v'
-				case dir == 'v' && v == 0:
-					dir = '>'
-				case dir == 'v' && v == 1:
-					dir = '<'
-				case dir == '<' && v == 0:
-					dir = 'v'
-				case dir == '<' && v == 1:
-					dir = '^'
+				switch v {
+				case 0:
+					dir = dir.Left()
+				case 1:
+					dir = dir.Right()
 				}
-				switch dir {
-				case '^':
-					cur.R--
-				case '>':
-					cur.C++
-				case 'v':
-					cur.R++
-				case '<':
-					cur.C--
-				}
+				cur = cur.Add(dir)
 
-				rr.Track(cur.R)
-				cc.Track(cur.C)
+				rr.Track(cur.R())
+				cc.Track(cur.C())
 
 			} else {
 				m[cur] = v
-				rr.Track(cur.R)
-				cc.Track(cur.C)
+				rr.Track(cur.R())
+				cc.Track(cur.C())
 			}
 			turn = !turn
 		},
@@ -244,7 +222,7 @@ func part2(t *testing.T, in string) (ret string) {
 	buf := new(strings.Builder)
 	for r := rr.Min; r <= rr.Max; r++ {
 		for c := cc.Min; c <= cc.Max; c++ {
-			if m[Coord{r, c}] == 1 {
+			if m[coords.RC(r, c)] == 1 {
 				fmt.Fprint(buf, "#")
 			} else {
 				fmt.Fprint(buf, ".")
@@ -252,6 +230,7 @@ func part2(t *testing.T, in string) (ret string) {
 		}
 		fmt.Fprintln(buf)
 	}
+
 	t.Logf("Output:\n%s", buf)
 
 	return buf.String()
