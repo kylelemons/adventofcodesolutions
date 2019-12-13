@@ -1,0 +1,150 @@
+// Copyright 2018 Kyle Lemons
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package acoday is the entrypoint for this AoC solution.
+package acoday
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+	"text/tabwriter"
+
+	"github.com/kylelemons/adventofcodesolutions/advent"
+)
+
+type Planet struct {
+	Pos [3]int
+	Vel [3]int
+}
+
+type Input struct {
+	Io, Europa, Ganymede, Callisto Planet
+
+	Planets []*Planet
+}
+
+func parseInput(t *testing.T, in string) *Input {
+	input := &Input{}
+	input.Planets = []*Planet{&input.Io, &input.Europa, &input.Ganymede, &input.Callisto}
+
+	var i int
+	advent.Lines(in).Extract(t, `<x=(-?\d+), y=(-?\d+), z=(-?\d+)>`, func(x, y, z int) {
+		input.Planets[i].Pos = [3]int{x, y, z}
+		i++
+	})
+	return input
+}
+
+func (in *Input) TimeStep() {
+	// Apply gravity
+	for i, p0 := range in.Planets {
+		for j, p1 := range in.Planets {
+			if i < j {
+				continue
+			}
+			for a := range p0.Pos {
+				switch {
+				case p0.Pos[a] < p1.Pos[a]:
+					p0.Vel[a]++
+					p1.Vel[a]--
+				case p0.Pos[a] > p1.Pos[a]:
+					p0.Vel[a]--
+					p1.Vel[a]++
+				}
+			}
+		}
+	}
+	// Apply velocity
+	for _, p := range in.Planets {
+		for a := range p.Pos {
+			p.Pos[a] += p.Vel[a]
+		}
+	}
+}
+
+func (in *Input) Energy() (energy int) {
+	abs := func(a int) int {
+		if a < 0 {
+			return -a
+		}
+		return a
+	}
+	for _, p := range in.Planets {
+		var kinetic, potential int
+		for _, v := range p.Vel {
+			kinetic += abs(v)
+		}
+		for _, d := range p.Pos {
+			potential += abs(d)
+		}
+		energy += kinetic * potential
+	}
+	return
+}
+
+func (in *Input) String() string {
+	buf := new(strings.Builder)
+	w := tabwriter.NewWriter(buf, 0, 0, 0, ' ', tabwriter.AlignRight)
+	for i, p := range in.Planets {
+		fmt.Fprintf(w, "%d: \tpos=<x=\t%d\t,y=\t%d\t,z=\t%d\t>, vel=<x=\t%d\t,y=\t%d\t,z=\t%d\t>\n",
+			i, p.Pos[0], p.Pos[1], p.Pos[2], p.Vel[0], p.Vel[1], p.Vel[2])
+	}
+	w.Flush()
+	return buf.String()
+}
+
+func part1(t *testing.T, in string, N int) (ret int) {
+	input := parseInput(t, in)
+
+	for i := 0; i < N; i++ {
+		if i%100 == 0 { //}= 100 {
+			t.Logf("After %d steps: (e=%d)\n%s", i, input.Energy(), input)
+		}
+		input.TimeStep()
+	}
+	e := input.Energy()
+	t.Logf("After %d steps: (e=%d)\n%s", N, e, input)
+
+	return e
+}
+
+func TestPart1(t *testing.T) {
+	tests := []struct {
+		name  string
+		in    string
+		steps int
+		want  int
+	}{
+		{"part1 example 0", `
+<x=-1, y=0, z=2>
+<x=2, y=-10, z=-7>
+<x=4, y=-8, z=8>
+<x=3, y=5, z=-1>`, 10, 179},
+		{"part1 example 1", `
+<x=-8, y=-10, z=0>
+<x=5, y=5, z=10>
+<x=2, y=-7, z=3>
+<x=9, y=-8, z=-3>`, 100, 1940},
+		{"part1 answer", advent.ReadFile(t, "input.txt"), 1000, 9441},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got, want := part1(t, strings.TrimLeft(test.in, "\n"), test.steps), test.want; got != want {
+				t.Errorf("part1(%#v)\n = %#v, want %#v", test.in, got, want)
+			}
+		})
+	}
+}
