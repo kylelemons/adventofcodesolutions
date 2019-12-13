@@ -29,7 +29,7 @@ func parseInput(t *testing.T, in string) *Input {
 	input := &Input{
 		// ...
 	}
-	advent.Lines(in).Extract(t, `([xy])=(-?\d+), ([xy])=(-?\d+)..(-?\d+)`, func(dimA string, valA int, dimB string, minB, maxB int) {
+	advent.Lines(in).Extract(t, `(.*)`, func(v string) {
 		// ...
 	})
 	return input
