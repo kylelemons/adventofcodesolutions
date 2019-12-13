@@ -149,7 +149,7 @@ func TestPart1(t *testing.T) {
 |.||||..|.
 ...#.|..|.
 `, "\n"), 1147},
-		{"part1 answer", advent.ReadFile(t, "input.txt"), -1},
+		{"part1 answer", advent.ReadFile(t, "input.txt"), 645946},
 	}
 
 	for _, test := range tests {
@@ -184,7 +184,7 @@ func part2(t *testing.T, in string) (ret int) {
 		input.Advance()
 
 		rv := input.ResourceValue()
-		log.Printf("After %d minute: %d", i+1, rv)
+		// log.Printf("After %d minute: %d", i+1, rv)
 		if rv == 0 {
 			break
 		}
@@ -200,19 +200,7 @@ func TestPart2(t *testing.T) {
 		in   string
 		want int
 	}{
-		{"part2 example 0", strings.Trim(`
-.#.#...|#.
-.....#|##|
-.|..|...#.
-..|#.....#
-#.#|||#|#|
-...#.||...
-.|....|...
-||...#|.#|
-|.||||..|.
-...#.|..|.
-`, "\n"), 1147},
-		{"part2 answer", advent.ReadFile(t, "input.txt"), -1},
+		{"part2 answer", advent.ReadFile(t, "input.txt"), 227688},
 	}
 
 	for _, test := range tests {
