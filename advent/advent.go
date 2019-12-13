@@ -20,18 +20,44 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"reflect"
 	"regexp"
 	"strings"
-	"testing"
 	"unicode/utf8"
 )
 
 // Scanner is a helper for doing simple linewise scanning.
 type Scanner string
 
+// An OptionalT represents the poritons of *testing.T that are used by the
+// advent package.
+//
+// Any API that accepts an OptionalT can also be passed nil, in which case
+// a default implementation will be created and used in its place.
+type OptionalT interface {
+	Fatalf(format string, args ...interface{})
+	Helper()
+}
+
+type defaultT struct{}
+
+func (t defaultT) Helper() {}
+
+func (t defaultT) Fatalf(format string, args ...interface{}) {
+	log.Fatalf(format, args...)
+}
+
+func maybeT(t OptionalT) OptionalT {
+	if t != nil {
+		return t
+	}
+	return defaultT{}
+}
+
 // Scan scans the string into the given pointers using fmt.Sscan.
-func (s Scanner) Scan(t *testing.T, ptrs ...interface{}) {
+func (s Scanner) Scan(t OptionalT, ptrs ...interface{}) {
+	t = maybeT(t)
 	t.Helper()
 	if _, err := fmt.Sscan(string(s), ptrs...); err != nil {
 		if err == io.EOF {
@@ -41,7 +67,8 @@ func (s Scanner) Scan(t *testing.T, ptrs ...interface{}) {
 }
 
 // Extract extracts sequential capture groups from the scanner into the given pointers.
-func (s Scanner) Extract(t *testing.T, re string, ptrs ...interface{}) {
+func (s Scanner) Extract(t OptionalT, re string, ptrs ...interface{}) {
+	t = maybeT(t)
 	t.Helper()
 	if !s.CanExtract(t, re, ptrs...) {
 		t.Fatalf("Input %q does not match /%s/", s, re)
@@ -54,7 +81,8 @@ func (s Scanner) Extract(t *testing.T, re string, ptrs ...interface{}) {
 // CanExtact returns true if the line is fully scanned, false if the regex does
 // not match, and will fatal out if the regex is invalid or if a matched value
 // cannot be correctly stored.
-func (s Scanner) CanExtract(t *testing.T, re string, ptrs ...interface{}) bool {
+func (s Scanner) CanExtract(t OptionalT, re string, ptrs ...interface{}) bool {
+	t = maybeT(t)
 	t.Helper()
 	r, err := regexp.Compile(re)
 	if err != nil {
@@ -80,7 +108,8 @@ func (s Scanner) CanExtract(t *testing.T, re string, ptrs ...interface{}) bool {
 }
 
 // ReadFile reads the named file and returns it as a string.
-func ReadFile(t *testing.T, filename string) string {
+func ReadFile(t OptionalT, filename string) string {
+	t = maybeT(t)
 	t.Helper()
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -150,7 +179,8 @@ func (d *Delimited) Each(each func(i int, token Scanner)) {
 //
 // Example:
 //   advent.Lines(input).Scan(t, func(command string, arg int) { ... })
-func (d *Delimited) Scan(t *testing.T, each interface{}) {
+func (d *Delimited) Scan(t OptionalT, each interface{}) {
+	t = maybeT(t)
 	t.Helper()
 
 	fval := reflect.ValueOf(each)
@@ -165,7 +195,8 @@ func (d *Delimited) Scan(t *testing.T, each interface{}) {
 //
 // Example:
 //   advent.Lines(input).Extract(t, input, `([ULDR])(\d+)`, func(dir string, steps int) { ... })
-func (d *Delimited) Extract(t *testing.T, re string, each interface{}) {
+func (d *Delimited) Extract(t OptionalT, re string, each interface{}) {
+	t = maybeT(t)
 	t.Helper()
 
 	fval := reflect.ValueOf(each)
