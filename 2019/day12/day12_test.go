@@ -24,9 +24,11 @@ import (
 	"github.com/kylelemons/adventofcodesolutions/advent"
 )
 
+const Axes = 3
+
 type Planet struct {
-	Pos [3]int
-	Vel [3]int
+	Pos [Axes]int
+	Vel [Axes]int
 }
 
 type Input struct {
@@ -35,7 +37,7 @@ type Input struct {
 	Planets []*Planet
 }
 
-func parseInput(t *testing.T, in string) *Input {
+func parseInput(t testing.TB, in string) *Input {
 	input := &Input{}
 	input.Planets = []*Planet{&input.Io, &input.Europa, &input.Ganymede, &input.Callisto}
 
@@ -47,30 +49,43 @@ func parseInput(t *testing.T, in string) *Input {
 	return input
 }
 
-func (in *Input) TimeStep() {
+func (in *Input) StepAxis(axis int) {
 	// Apply gravity
 	for i, p0 := range in.Planets {
 		for j, p1 := range in.Planets {
 			if i < j {
 				continue
 			}
-			for a := range p0.Pos {
-				switch {
-				case p0.Pos[a] < p1.Pos[a]:
-					p0.Vel[a]++
-					p1.Vel[a]--
-				case p0.Pos[a] > p1.Pos[a]:
-					p0.Vel[a]--
-					p1.Vel[a]++
-				}
+			switch {
+			case p0.Pos[axis] < p1.Pos[axis]:
+				p0.Vel[axis]++
+				p1.Vel[axis]--
+			case p0.Pos[axis] > p1.Pos[axis]:
+				p0.Vel[axis]--
+				p1.Vel[axis]++
 			}
 		}
 	}
 	// Apply velocity
 	for _, p := range in.Planets {
-		for a := range p.Pos {
-			p.Pos[a] += p.Vel[a]
-		}
+		p.Pos[axis] += p.Vel[axis]
+	}
+}
+
+func (in *Input) Axis(axis int) [6]int {
+	return [6]int{
+		in.Planets[0].Pos[axis],
+		in.Planets[1].Pos[axis],
+		in.Planets[2].Pos[axis],
+		in.Planets[0].Vel[axis],
+		in.Planets[1].Vel[axis],
+		in.Planets[2].Vel[axis],
+	}
+}
+
+func (in *Input) TimeStep() {
+	for i := 0; i < Axes; i++ {
+		in.StepAxis(i)
 	}
 }
 
@@ -146,5 +161,60 @@ func TestPart1(t *testing.T) {
 				t.Errorf("part1(%#v)\n = %#v, want %#v", test.in, got, want)
 			}
 		})
+	}
+}
+
+func part2(t *testing.T, in string) (ret int) {
+	input := parseInput(t, in)
+
+	var periods []int
+nextAxis:
+	for axis := 0; axis < Axes; axis++ {
+		start := input.Axis(axis)
+
+		for steps := 1; ; steps++ {
+			input.StepAxis(axis)
+			if input.Axis(axis) == start {
+				periods = append(periods, steps)
+				continue nextAxis
+			}
+		}
+	}
+	return advent.LCM(periods...)
+}
+
+func TestPart2(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want int
+	}{
+		{"part2 example 0", `
+<x=-1, y=0, z=2>
+<x=2, y=-10, z=-7>
+<x=4, y=-8, z=8>
+<x=3, y=5, z=-1>`, 2772},
+		{"part2 example 1", `
+<x=-8, y=-10, z=0>
+<x=5, y=5, z=10>
+<x=2, y=-7, z=3>
+<x=9, y=-8, z=-3>`, 4686774924},
+		{"part2 answer", advent.ReadFile(t, "input.txt"), 503560201099704},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got, want := part2(t, strings.TrimLeft(test.in, "\n")), test.want; got != want {
+				t.Errorf("part2(%#v)\n = %#v, want %#v", test.in, got, want)
+			}
+		})
+	}
+}
+
+func BenchmarkTimeStep(b *testing.B) {
+	input := parseInput(b, advent.ReadFile(b, "input.txt"))
+
+	for i := 0; i < b.N; i++ {
+		input.TimeStep()
 	}
 }
