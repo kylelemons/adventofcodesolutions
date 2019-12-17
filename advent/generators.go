@@ -67,3 +67,36 @@ func Perm(n int, f func([]int)) {
 		i = 0
 	}
 }
+
+// Primes returns successive prime numbers.
+func Primes() func() int {
+	// Save prime numbers that we have seen so far.
+	var primes []int
+
+	// Keep track of the next number to try.
+	n := 1 // 0 and 1 are not primes, skip them
+	return func() int {
+	restart:
+		n++
+
+		divisor := 2 // don't bother with any divisors below 2
+
+		// Skip through the low numbers by using the existing primes
+		for _, divisor = range primes {
+			if n%divisor == 0 {
+				goto restart
+			}
+		}
+		divisor++
+
+		// Manually check other numbers until we get to n/2
+		for ; divisor <= n/2; divisor++ {
+			if n%divisor == 0 {
+				goto restart
+			}
+		}
+
+		primes = append(primes, n)
+		return n
+	}
+}
