@@ -79,7 +79,7 @@ func (p *Program) Run(t *testing.T) {
 		}
 
 		brk := func(size int) int {
-			for len(mem) < size {
+			for len(mem) <= size {
 				mem = append(mem, make([]int, 1024)...)
 			}
 			return size
