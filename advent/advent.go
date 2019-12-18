@@ -100,8 +100,15 @@ func (s Scanner) CanExtract(t OptionalT, re string, ptrs ...interface{}) bool {
 		if got, want := reflect.TypeOf(ptr).Kind(), reflect.Ptr; got != want {
 			t.Fatalf("can't scan into group %d: got %v, want %v", i+1, got, want)
 		}
-		if _, err := fmt.Sscan(val, ptr); err != nil {
-			t.Fatalf("failed to scan %q into %T: %s", val, ptr, err)
+		switch ptr := ptr.(type) {
+		case *string:
+			*ptr = val // store the full string
+		case *[]byte:
+			*ptr = []byte(val) // store the full string as bytes
+		default:
+			if _, err := fmt.Sscan(val, ptr); err != nil {
+				t.Fatalf("failed to scan %q into %T: %s", val, ptr, err)
+			}
 		}
 	}
 	return true
