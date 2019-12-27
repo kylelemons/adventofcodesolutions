@@ -224,7 +224,7 @@ YN......#               VT..#....QG
   #########.###.###.#############  
            B   J   C               
            U   P   P               `, 58},
-		{"part1 answer", advent.ReadFile(t, "input.txt"), -1},
+		{"part1 answer", advent.ReadFile(t, "input.txt"), 578},
 	}
 
 	for _, test := range tests {
