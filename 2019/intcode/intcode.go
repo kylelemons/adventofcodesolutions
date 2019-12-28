@@ -33,6 +33,13 @@ type Program struct {
 
 	// Debugf is called with debugging information during execution.
 	Debugf func(format string, args ...interface{})
+
+	// Snapshot registers
+	pc  int // Program Counter (default: 0)
+	rel int // REL addressing mode offset (default: 0)
+
+	// Notifications
+	shutdown chan struct{}
 }
 
 // Compile compiles source into a program.
@@ -42,27 +49,54 @@ func Compile(t *testing.T, source string) *Program {
 		mem = append(mem, instr)
 	})
 	return &Program{
-		Memory: mem,
-		Input:  func() int { t.Fatalf("Input requested but no Input function provided to program"); return 0 },
-		Output: func(v int) { t.Logf("Output(%v)", v) },
-		Debugf: func(string, ...interface{}) {},
+		Memory:   mem,
+		Input:    func() int { t.Fatalf("Input requested but no Input function provided to program"); return 0 },
+		Output:   func(v int) { t.Logf("Output(%v)", v) },
+		Debugf:   func(string, ...interface{}) {},
+		shutdown: make(chan struct{}),
 	}
+}
+
+// Snapshot returns a duplicate program that can be executed, and which will
+// pick up where it left off.
+//
+// Snapshot is safe to call from within Input and Output, and execution of the
+// cloned program will begin with the I/O instruction.
+//
+// Note that the function inputs are retained,
+func (p *Program) Snapshot() *Program {
+	p2 := *p
+	p2.Memory = append([]int(nil), p.Memory...)
+	p2.shutdown = make(chan struct{})
+	return &p2
+}
+
+// Halt causes the program to abort before executing the next instruction.
+//
+// It is an error to Halt a program more than once.
+func (p *Program) Halt() {
+	close(p.shutdown)
 }
 
 // Run a program and return the memory after it halts.
 func (p *Program) Run(t *testing.T) {
-	mem, pc, rel := p.Memory, 0, 0
-
 	adv := func() (v int) {
-		v, pc = mem[pc], pc+1
+		v, p.pc = p.Memory[p.pc], p.pc+1
 		return
 	}
 
 	for {
-		if pc < 0 || pc > len(mem) {
-			t.Fatalf("PC %d out of bounds", pc)
+		select {
+		case <-p.shutdown:
+			return
+		default:
 		}
 
+		if p.pc < 0 || p.pc > len(p.Memory) {
+			t.Fatalf("PC %d out of bounds", p.pc)
+		}
+
+		instructionPC := p.pc
 		next := adv()
 		op, flags := next%100, strconv.Itoa(next/100)
 
@@ -79,20 +113,20 @@ func (p *Program) Run(t *testing.T) {
 		}
 
 		brk := func(size int) int {
-			for len(mem) <= size {
-				mem = append(mem, make([]int, 1024)...)
+			for len(p.Memory) <= size {
+				p.Memory = append(p.Memory, make([]int, 1024)...)
 			}
 			return size
 		}
 		mode := func(param Param) *int {
 			switch param.mode {
 			case '0': // positional
-				return &mem[brk(param.value)]
+				return &p.Memory[brk(param.value)]
 			case '1': // immediate
 				v := param.value // paranoia
 				return &v
 			case '2': // relative
-				return &mem[brk(param.value+rel)]
+				return &p.Memory[brk(param.value+p.rel)]
 			default:
 				t.Fatalf("Unrecognized flag %q", param.mode)
 				return nil
@@ -101,18 +135,17 @@ func (p *Program) Run(t *testing.T) {
 		debug := func(param Param) fmt.Stringer {
 			switch param.mode {
 			case '0':
-				return lazyf("(%v @ mem[%d])", mem[brk(param.value)], param.value)
+				return lazyf("(%v @ mem[%d])", p.Memory[brk(param.value)], param.value)
 			case '1':
 				return lazyf("(%v)", param.value)
 			case '2': // relative
-				return lazyf("(%v @ mem[%d+%d])", mem[brk(param.value+rel)], param.value, rel)
+				return lazyf("(%v @ mem[%d+%d])", p.Memory[brk(param.value+p.rel)], param.value, p.rel)
 			default:
 				fmt.Printf("Unrecognized flag %q\n", param.mode)
 				t.Fatalf("Unrecognized flag %q", param.mode)
 				return nil
 			}
 		}
-		_ = debug
 		switch op {
 		case 1: // add
 			src1, src2, dst := get(), get(), get()
@@ -125,24 +158,30 @@ func (p *Program) Run(t *testing.T) {
 		case 3: // input
 			dst := get()
 			p.Debugf("INPUT -> %s", debug(dst))
+			restore := p.pc
+			p.pc = instructionPC
 			*mode(dst) = p.Input()
+			p.pc = restore
 		case 4: // output
 			src := get()
 			p.Debugf("OUTPUT <- %s", debug(src))
+			restore := p.pc
+			p.pc = instructionPC
 			p.Output(*mode(src))
+			p.pc = restore
 		case 5: // jump-nonzero
 			cond, to := get(), get()
 			p.Debugf("JNZ %s to %s", debug(cond), debug(to))
 			if *mode(cond) != 0 {
 				p.Debugf("  ... branch taken")
-				pc = *mode(to)
+				p.pc = *mode(to)
 			}
 		case 6: // jump-zero
 			cond, to := get(), get()
 			p.Debugf("JZ %s to %s", debug(cond), debug(to))
 			if *mode(cond) == 0 {
 				p.Debugf("  ... branch taken")
-				pc = *mode(to)
+				p.pc = *mode(to)
 			}
 		case 7: // less-than
 			a, b, dst := get(), get(), get()
@@ -162,7 +201,7 @@ func (p *Program) Run(t *testing.T) {
 			}
 		case 9: // adjrel
 			a := get()
-			rel += *mode(a)
+			p.rel += *mode(a)
 		case 99:
 			p.Debugf("HALT")
 			return
