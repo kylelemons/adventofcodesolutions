@@ -17,6 +17,9 @@ package advent
 import (
 	"bytes"
 	"fmt"
+	"strings"
+
+	"github.com/kylelemons/adventofcodesolutions/advent/coords"
 )
 
 // Make2D makes a 2d slice of bytes of the given dimensions.
@@ -50,4 +53,29 @@ func Split2D(in string) [][]byte {
 		}
 	}
 	return out
+}
+
+// String2DMap returns a String2D-format string for the given map.
+func String2DMap(m map[coords.Coord]byte) string {
+	var rows, cols RangeTracker
+	for loc := range m {
+		rows.Track(loc.R())
+		cols.Track(loc.C())
+	}
+	if !rows.Valid {
+		return ""
+	}
+
+	ret := new(strings.Builder)
+	for r := rows.Min; r <= rows.Max; r++ {
+		for c := cols.Min; c <= cols.Max; c++ {
+			var ch byte = ' '
+			if v, ok := m[coords.RC(r, c)]; ok {
+				ch = v
+			}
+			ret.WriteByte(ch)
+		}
+		ret.WriteByte('\n')
+	}
+	return ret.String()
 }

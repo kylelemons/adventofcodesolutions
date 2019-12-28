@@ -39,7 +39,7 @@ type Program struct {
 	rel int // REL addressing mode offset (default: 0)
 
 	// Notifications
-	shutdown chan struct{}
+	shutdown chan bool
 }
 
 // Compile compiles source into a program.
@@ -53,7 +53,7 @@ func Compile(t *testing.T, source string) *Program {
 		Input:    func() int { t.Fatalf("Input requested but no Input function provided to program"); return 0 },
 		Output:   func(v int) { t.Logf("Output(%v)", v) },
 		Debugf:   func(string, ...interface{}) {},
-		shutdown: make(chan struct{}),
+		shutdown: make(chan bool, 1),
 	}
 }
 
@@ -67,15 +67,47 @@ func Compile(t *testing.T, source string) *Program {
 func (p *Program) Snapshot() *Program {
 	p2 := *p
 	p2.Memory = append([]int(nil), p.Memory...)
-	p2.shutdown = make(chan struct{})
+	p2.shutdown = make(chan bool, 1)
 	return &p2
 }
 
 // Halt causes the program to abort before executing the next instruction.
 //
-// It is an error to Halt a program more than once.
+// If a Halt is already pending, another is not queued.
 func (p *Program) Halt() {
-	close(p.shutdown)
+	select {
+	case p.shutdown <- true:
+	default:
+	}
+}
+
+// ASCII sets up text-mode I/O.
+//
+// The in function is called when a new line of input is requested.
+// The out function is called when a new line of output is ready.
+// The oob function is called if a non-ASCII output is provided.
+func (p *Program) ASCII(in func() string, out func(v string), oob func(v int)) {
+	var pendingInput string
+	p.Input = func() (v int) {
+		if pendingInput == "" {
+			pendingInput = in() + "\n"
+		}
+		v, pendingInput = int(pendingInput[0]), pendingInput[1:]
+		return
+	}
+	var pendingOutput []byte
+	p.Output = func(v int) {
+		if v == int('\n') {
+			out(string(pendingOutput))
+			pendingOutput = pendingOutput[:0]
+			return
+		}
+		if v < 1 || v >= 255 {
+			oob(v)
+			return
+		}
+		pendingOutput = append(pendingOutput, byte(v))
+	}
 }
 
 // Run a program and return the memory after it halts.
