@@ -16,6 +16,7 @@
 package acoday
 
 import (
+	"flag"
 	"log"
 	"testing"
 	"time"
@@ -184,7 +185,13 @@ nextRow:
 	return
 }
 
+var long = flag.Bool("long", false, "Run long tests")
+
 func TestPart2(t *testing.T) {
+	if !*long {
+		t.Skip("Run with --long to run this test")
+	}
+
 	tests := []struct {
 		name string
 		in   string
