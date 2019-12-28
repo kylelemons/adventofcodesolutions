@@ -18,7 +18,6 @@ package advent
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"reflect"
@@ -60,8 +59,6 @@ func (s Scanner) Scan(t OptionalT, ptrs ...interface{}) {
 	t = maybeT(t)
 	t.Helper()
 	if _, err := fmt.Sscan(string(s), ptrs...); err != nil {
-		if err == io.EOF {
-		}
 		t.Fatalf("Sscan: %s", err)
 	}
 }
@@ -218,14 +215,13 @@ func (d *Delimited) Extract(t OptionalT, re string, each interface{}) {
 //  - a []interface{} for passing to fmt.Scan* corresponding 1:1 to params
 //  - a []reflect.Value for calling the fval function with the internal params
 func inputsFor(fval reflect.Value) (scanInputs []interface{}, callInputs []reflect.Value) {
-	var values, pointers []reflect.Value
+	var values []reflect.Value
 	var rawPointers []interface{}
 	ftyp := fval.Type()
 	for i, n := 0, ftyp.NumIn(); i < n; i++ {
 		it := ftyp.In(i)
 		ptr := reflect.New(it)
 		values = append(values, ptr.Elem())
-		pointers = append(pointers, ptr)
 		rawPointers = append(rawPointers, ptr.Interface())
 	}
 	return rawPointers, values
