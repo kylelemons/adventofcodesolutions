@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Package acoday is the entrypoint for this AoC solution.
-package acoday
+package aocday
 
 import (
 	"testing"
