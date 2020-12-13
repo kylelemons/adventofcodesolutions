@@ -181,7 +181,7 @@ findStart:
 				max, at = reduction, length
 			}
 		}
-		fname, best := string('A'+len(funcs)), long[start:][:at]
+		fname, best := string(rune('A'+len(funcs))), long[start:][:at]
 		long = strings.ReplaceAll(long, best, fname)
 		t.Logf("%s: %s (reduces by %d)", fname, best, max)
 		funcs = append(funcs, best)
