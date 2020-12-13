@@ -24,8 +24,7 @@ func (c Coord) In2D(matrix [][]byte) byte {
 // If the coordinate is not in bounds, false will be returned.
 func (c Coord) InBounds2D(matrix [][]byte) (byte, bool) {
 	row, col := c.R(), c.C()
-	height, width := len(matrix), len(matrix[row])
-	if row < 0 || col < 0 || row >= height || col >= width {
+	if row < 0 || col < 0 || row >= len(matrix) || col >= len(matrix[row]) {
 		return 0, false
 	}
 	return matrix[row][col], true
