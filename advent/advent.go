@@ -17,6 +17,7 @@ package advent
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -127,6 +128,17 @@ type Delimited struct {
 	Scanner *bufio.Scanner
 }
 
+// All returns all of the delimited values, one per string.
+func (d *Delimited) All(t OptionalT) (values []string) {
+	for d.Scanner.Scan() {
+		values = append(values, d.Scanner.Text())
+	}
+	if err := d.Scanner.Err(); err != nil {
+		t.Fatalf("Failed to scan after %d values: %s", len(values), err)
+	}
+	return
+}
+
 // Lines returns a Delimited helper for line-delimited inputs.
 func Lines(input string) *Delimited {
 	return &Delimited{
@@ -144,6 +156,32 @@ func withSplitter(input string, splitter bufio.SplitFunc) *Delimited {
 
 // Words returns a Delimited helper for word-delimited inputs.
 func Words(input string) *Delimited { return withSplitter(input, bufio.ScanWords) }
+
+// Records returns a Delimited helper for blank-line-delimited inputs.
+func Records(input string) *Delimited {
+	return withSplitter(input, func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		n := bytes.Index(data, []byte{'\n', '\n'})
+		switch {
+		case n == -1 && atEOF:
+			record := bytes.Trim(data, "\n")
+			if len(record) == 0 {
+				// no final record
+				return 0, nil, nil
+			}
+			// return the last record
+			return len(data), record, nil
+		case n == -1:
+			// no EOR found, get more data
+			return 0, nil, nil
+		case n == 0:
+			// empty record, skip
+			return 2, nil, nil
+		default:
+			// return the record
+			return n + 2, bytes.Trim(data[:n], "\n"), nil
+		}
+	})
+}
 
 // Split returns a Delimited helper for rune-delimited inputs (e.g. comma).
 func Split(input string, delim rune) *Delimited {
