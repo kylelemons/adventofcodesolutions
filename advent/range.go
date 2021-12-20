@@ -39,6 +39,13 @@ func (rt *RangeTracker) Track(n int) int {
 	return n
 }
 
+// TrackAll is like Track but tracks all of the given numbers, not returning anything.
+func (rt *RangeTracker) TrackAll(n ...int) {
+	for _, n := range n {
+		rt.Track(n)
+	}
+}
+
 // Delta returns the size of the range.
 func (rt *RangeTracker) Delta() int {
 	if !rt.Valid {
