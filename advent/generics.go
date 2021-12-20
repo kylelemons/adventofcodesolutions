@@ -1,9 +1,10 @@
+//go:build go1.18
+
 package advent
 
-import "testing"
-
-func Must[T any](value T, err error) func(t *testing.T) T {
-	return func(t *testing.T) T {
+func Must[T any](value T, err error) func(t OptionalT) T {
+	return func(t OptionalT) T {
+		t = maybeT(t)
 		t.Helper()
 		if err != nil {
 			t.Fatalf("Must[%T]: %s", *new(T), err)
