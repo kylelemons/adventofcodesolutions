@@ -100,3 +100,52 @@ func TestPart1(t *testing.T) {
 		})
 	}
 }
+
+func part2(t *testing.T, in string) (ret int) {
+	input := parseInput(t, in)
+
+	buf := make([]byte, 0, input.MaxLen)
+	for _, r := range input.Ranges {
+	nextNumber:
+		for i := r.Lo; i <= r.Hi; i++ {
+			v := strconv.AppendInt(buf[:0], int64(i), 10)
+		nextSize:
+			for n := 1; n <= len(v)/2; n++ {
+				if len(v)%n != 0 {
+					// Don't check sizes that don't evenly divide the number
+					continue nextSize
+				}
+				for start := n; start+n <= len(v); start += n {
+					if base, check := v[:n], v[start:][:n]; !bytes.Equal(base, check) {
+						// We're done checking this size if any of the segments don't match
+						continue nextSize
+					}
+				}
+				// If we get here, all segments match at this size, so we can move on to the next number
+				ret += i
+				continue nextNumber
+			}
+		}
+	}
+
+	return
+}
+
+func TestPart2(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want int
+	}{
+		{"part2 example 0", "11-22,95-115,998-1012,1188511880-1188511890,222220-222224,1698522-1698528,446443-446449,38593856-38593862,565653-565659,824824821-824824827,2121212118-2121212124", 4174379265},
+		{"part2 answer", advent.ReadFile(t, "input.txt"), 53481866137},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got, want := part2(t, test.in), test.want; got != want {
+				t.Errorf("part2(%#v)\n = %#v, want %#v", test.in, got, want)
+			}
+		})
+	}
+}
