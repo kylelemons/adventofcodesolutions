@@ -110,7 +110,59 @@ L82`, 3},
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got, want := part1(t, test.in), test.want; got != want {
+			if got, want := part2(t, test.in), test.want; got != want {
+				t.Errorf("part1(%#v)\n = %#v, want %#v", test.in, got, want)
+			}
+		})
+	}
+}
+
+func part2(t *testing.T, in string) (ret int) {
+	input := parseInput(t, in)
+
+	dial := 50
+	for _, turn := range input.Lines {
+		for range turn.Count {
+			dial += turn.Dir
+			if dial >= 100 {
+				dial -= 100
+			}
+			if dial < 0 {
+				dial += 100
+			}
+			if dial == 0 {
+				ret++
+			}
+		}
+	}
+	return
+}
+
+func TestPart2(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want int
+	}{
+		{"example", "L68\nL30\nR48\nL5\nR60\nL55\nL1\nL99\nR14\nL82", 6},
+		{"single step to zero (right)", "R50", 1},
+		{"single step to zero (left)", "L50", 1},
+		{"full rotation passing zero (right)", "R100", 1},
+		{"full rotation passing zero (left)", "L100", 1},
+		{"multiple rotations (R1000)", "R1000", 10},
+		{"multiple rotations (L1000)", "L1000", 10},
+		{"multiple rotations landing on zero (R1050)", "R1050", 11},
+		{"multiple rotations landing on zero (L1050)", "L1050", 11},
+		{"move away from zero and return", "R50\nL5\nR5", 2},
+		{"rotations starting from zero", "R50\nR100\nL100", 3},
+		{"small steps never reaching zero", "R10\nL20\nR5", 0},
+		{"overshooting zero back and forth", "R60\nL20", 2},
+		{"part2 answer", advent.ReadFile(t, "input.txt"), 5847},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got, want := part2(t, test.in), test.want; got != want {
 				t.Errorf("part1(%#v)\n = %#v, want %#v", test.in, got, want)
 			}
 		})
