@@ -23,12 +23,16 @@ import (
 )
 
 type Input struct {
-	Lines []string
+	Lines [][]byte
 }
 
 func parseInput(t *testing.T, in string) *Input {
-	input := &Input{
-		Lines: strings.Split(strings.TrimSpace(in), "\n"),
+	input := &Input{}
+	for _, line := range strings.Split(strings.TrimSpace(in), "\n") {
+		if line == "" {
+			continue
+		}
+		input.Lines = append(input.Lines, []byte(line))
 	}
 	return input
 }
@@ -86,6 +90,74 @@ func TestPart1(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			if got, want := part1(t, test.in), test.want; got != want {
 				t.Errorf("part1(%#v)\n = %#v, want %#v", test.in, got, want)
+			}
+		})
+	}
+}
+
+func part2(t *testing.T, in string) (ret int) {
+	input := parseInput(t, in)
+
+	isRoll := func(i, j int) bool {
+		if i < 0 || j < 0 {
+			return false
+		}
+		if i >= len(input.Lines) || j >= len(input.Lines[i]) {
+			return false
+		}
+		return input.Lines[i][j] == '@'
+	}
+
+	remove := func() (removed int) {
+		for i := range input.Lines {
+			for j := range input.Lines[i] {
+				if !isRoll(i, j) {
+					continue
+				}
+
+				rolls := 0
+				for _, di := range []int{-1, 0, 1} {
+					for _, dj := range []int{-1, 0, 1} {
+						if di == 0 && dj == 0 {
+							continue
+						}
+						if isRoll(i+di, j+dj) {
+							rolls++
+						}
+					}
+				}
+				if rolls < 4 {
+					removed++
+					input.Lines[i][j] = 'x'
+				}
+			}
+		}
+		return
+	}
+
+	for {
+		removed := remove()
+		if removed == 0 {
+			return
+		}
+		ret += removed
+	}
+}
+
+func TestPart2(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want int
+	}{
+		{"part2 example 0", "..@@.@@@@.\n@@@.@.@.@@\n@@@@@.@.@@\n@.@@@@..@.\n@@.@@@@.@@\n.@@@@@@@.@\n.@.@.@.@@@\n@.@@@.@@@@\n.@@@@@@@@.\n@.@.@@@.@.\n", 43},
+		{"part2 answer", advent.ReadFile(t, "input.txt"), 9518},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got, want := part2(t, test.in), test.want; got != want {
+				t.Errorf("part2(%#v)\n = %#v, want %#v", test.in, got, want)
 			}
 		})
 	}
