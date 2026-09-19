@@ -18,6 +18,7 @@ package aocday
 import (
 	"bufio"
 	"cmp"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -104,6 +105,104 @@ func TestPart1(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			if got, want := part1(t, test.in), test.want; got != want {
 				t.Errorf("part1(%#v)\n = %#v, want %#v", test.in, got, want)
+			}
+		})
+	}
+}
+
+func maxJoltagePart2(bank string) int {
+	// Recurrence relation:
+	//   maxJoltage( [prefix] + [suffix], n ) = maxJoltage([prefix], 1) concat maxJoltage( [suffix], n-1 )
+
+	concat := func(a, b, bDigits int) int {
+		return a*int(math.Pow10(bDigits)) + b
+	}
+
+	var maxJoltage func(bank string, digits int) int
+	maxJoltage = func(bank string, digits int) (_ret int) {
+		// defer func() {
+		// 	fmt.Printf("maxJoltage(%q, %d) = %d\n", bank, digits, _ret)
+		// }()
+
+		if len(bank) < digits {
+			return -1
+		}
+
+		if digits == 0 {
+			panic("can't find joltage of empty string")
+		}
+		if digits == 1 {
+			maxChar := int(bank[0] - '0')
+			for _, char := range bank[1:] {
+				value := int(char - '0')
+				if value > maxChar {
+					maxChar = value
+				}
+			}
+			return maxChar
+		}
+
+		maxValue := -1
+		for prefixLen := range len(bank) {
+			prefixJoltage := maxJoltage(bank[:prefixLen], 1)
+			suffixJoltage := maxJoltage(bank[prefixLen:], digits-1)
+			if prefixJoltage > 0 && suffixJoltage > 0 {
+				value := concat(prefixJoltage, suffixJoltage, digits-1)
+				if value > maxValue {
+					maxValue = value
+					// fmt.Printf("New max: joltage(%q):joltage(%q) = %v\n",
+					// 	bank[:prefixLen], bank[prefixLen:],
+					// 	value,
+					// )
+				}
+			}
+		}
+		return maxValue
+	}
+
+	type cacheKey struct {
+		bank   string
+		digits int
+	}
+	cache := make(map[cacheKey]int)
+	orig := maxJoltage
+	maxJoltage = func(bank string, digits int) int {
+		key := cacheKey{bank, digits}
+		if v, ok := cache[key]; ok {
+			return v
+		}
+		v := orig(bank, digits)
+		cache[key] = v
+		return v
+	}
+
+	return maxJoltage(bank, 12)
+}
+
+func part2(t *testing.T, in string) (ret int) {
+	input := parseInput(t, in)
+
+	for _, bank := range input.Banks {
+		ret += maxJoltagePart2(bank)
+	}
+
+	return
+}
+
+func TestPart2(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want int
+	}{
+		{"part2 example 0", "987654321111111\n811111111111119\n234234234234278\n818181911112111", 3121910778619},
+		{"part2 answer", advent.ReadFile(t, "input.txt"), 176582889354075},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got, want := part2(t, test.in), test.want; got != want {
+				t.Errorf("part2(%#v)\n = %#v, want %#v", test.in, got, want)
 			}
 		})
 	}
