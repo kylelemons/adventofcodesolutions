@@ -18,8 +18,8 @@ package aocday
 import (
 	"bufio"
 	"cmp"
-	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -111,72 +111,43 @@ func TestPart1(t *testing.T) {
 }
 
 func maxJoltagePart2(bank string) int {
-	// Recurrence relation:
-	//   maxJoltage( [prefix] + [suffix], n ) = maxJoltage([prefix], 1) concat maxJoltage( [suffix], n-1 )
+	remaining := 12
 
-	concat := func(a, b, bDigits int) int {
-		return a*int(math.Pow10(bDigits)) + b
-	}
-
-	var maxJoltage func(bank string, digits int) int
-	maxJoltage = func(bank string, digits int) (_ret int) {
-		// defer func() {
-		// 	fmt.Printf("maxJoltage(%q, %d) = %d\n", bank, digits, _ret)
-		// }()
-
-		if len(bank) < digits {
-			return -1
+	maxChar := func(slice string) (maxChar string, at int) {
+		if len(slice) == 0 {
+			return "", 0
+		}
+		if len(slice) == 1 {
+			return slice, 0
 		}
 
-		if digits == 0 {
-			panic("can't find joltage of empty string")
-		}
-		if digits == 1 {
-			maxChar := int(bank[0] - '0')
-			for _, char := range bank[1:] {
-				value := int(char - '0')
-				if value > maxChar {
-					maxChar = value
-				}
-			}
-			return maxChar
-		}
-
-		maxValue := -1
-		for prefixLen := range len(bank) {
-			prefixJoltage := maxJoltage(bank[:prefixLen], 1)
-			suffixJoltage := maxJoltage(bank[prefixLen:], digits-1)
-			if prefixJoltage > 0 && suffixJoltage > 0 {
-				value := concat(prefixJoltage, suffixJoltage, digits-1)
-				if value > maxValue {
-					maxValue = value
-					// fmt.Printf("New max: joltage(%q):joltage(%q) = %v\n",
-					// 	bank[:prefixLen], bank[prefixLen:],
-					// 	value,
-					// )
-				}
+		maxChar, at, maxValue := slice[:1], 0, int(slice[0]-'0')
+		for i, char := range slice[1:] {
+			value := int(char - '0')
+			if value > maxValue {
+				maxChar, at, maxValue = string(char), i+1, value
 			}
 		}
-		return maxValue
+		return
 	}
 
-	type cacheKey struct {
-		bank   string
-		digits int
-	}
-	cache := make(map[cacheKey]int)
-	orig := maxJoltage
-	maxJoltage = func(bank string, digits int) int {
-		key := cacheKey{bank, digits}
-		if v, ok := cache[key]; ok {
-			return v
+	unused := bank
+	max := ""
+
+	// fmt.Printf("maxJoltagePart2(%q):\n", bank)
+	for remaining > 0 {
+		canChoose := unused
+		if len(unused) >= remaining {
+			canChoose = canChoose[:len(canChoose)-remaining+1] // you can choose the first one from the range
 		}
-		v := orig(bank, digits)
-		cache[key] = v
-		return v
+		greedy, foundAt := maxChar(canChoose)
+		unused = unused[foundAt+1:]
+		max += greedy
+		remaining--
+		// fmt.Printf("  remaining: %d, greedy: %q, unused: %q, max: %q, chose from %q\n", remaining, greedy, unused, max, canChoose)
 	}
-
-	return maxJoltage(bank, 12)
+	v, _ := strconv.Atoi(max)
+	return v
 }
 
 func part2(t *testing.T, in string) (ret int) {
