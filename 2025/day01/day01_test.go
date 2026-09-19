@@ -122,15 +122,41 @@ func part2(t *testing.T, in string) (ret int) {
 
 	dial := 50
 	for _, turn := range input.Lines {
-		for range turn.Count {
-			dial += turn.Dir
+		// Any time we turn 100 clicks, we land at the same place while crossing zero.
+		ret += turn.Count / 100
+		turn.Count %= 100
+
+		// Don't do any further logic if we're counting full turns only.
+		if turn.Count == 0 {
+			continue
+		}
+
+		start := dial
+
+		// Invariants:
+		// * turn.Count is always < 100 now
+		//   ... thus we must never count twice for the rest of this logic
+		switch turn.Dir {
+		case +1:
+			// For right turns, we simply count if we land on zero or wrap around, but not both.
+			dial += turn.Count
 			if dial >= 100 {
 				dial -= 100
+				ret++
+			} else if dial == 0 {
+				ret++
 			}
+		case -1:
+			// For left turns, we count if we start above zero and cross zero,
+			// or if we land exactly on zero; both can't happen.
+			// If we end up negative, we might have started on zero, which doesn't count.
+			dial -= turn.Count
 			if dial < 0 {
+				if start > 0 {
+					ret++
+				}
 				dial += 100
-			}
-			if dial == 0 {
+			} else if dial == 0 {
 				ret++
 			}
 		}
