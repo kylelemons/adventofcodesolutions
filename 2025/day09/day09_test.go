@@ -75,6 +75,8 @@ func TestPart1(t *testing.T) {
 	}
 }
 
+// loopPairs yields consecutive (e0, e1) pairs of vertices representing each edge,
+// wrapping around to close the loop between the last and first vertex.
 func loopPairs(tiles []Tile) iter.Seq2[Tile, Tile] {
 	return func(yield func(Tile, Tile) bool) {
 		for i := 0; i+1 < len(tiles); i++ {
@@ -86,17 +88,31 @@ func loopPairs(tiles []Tile) iter.Seq2[Tile, Tile] {
 	}
 }
 
+// edgePiercesRect returns true if the edge (e0, e1) cuts into the strict interior
+// of the bounding box [minR, maxR] x [minC, maxC].
+//
+// Edges that run along the border of the rectangle (or only touch corners) are
+// valid boundary lines and do not pierce the strict interior.
 func edgePiercesRect(minR, maxR, minC, maxC int, e0, e1 Tile) bool {
+	// If the edge is vertical (e0.C == e1.C), transpose (R, C) with (C, R) so the
+	// same horizontal collision check can be reused for both orientations.
 	if e0.C == e1.C {
-		// horizontal line; reverse rows and columns so we can just do the vertical line logic
 		minR, maxR, minC, maxC = minC, maxC, minR, maxR
 		e0.R, e0.C, e1.R, e1.C = e0.C, e0.R, e1.C, e1.R
 	}
 	r := e0.R
 	cLo, cHi := min(e0.C, e1.C), max(e0.C, e1.C)
+	// Strict inequalities allow edges lying on rectangle borders (e.g. r == minR)
+	// while catching any edge passing through the open interval (minR, maxR) x (minC, maxC).
 	return minR < r && r < maxR && cHi > minC && cLo < maxC
 }
 
+// pointInPolygon determines whether continuous coordinates (r, c) lie inside
+// the orthogonal polygon using ray casting in the +C (rightward) direction.
+//
+// Since the ray travels horizontally along row r, only perpendicular (vertical)
+// edges can intersect it. We count crossings with vertical edges located to the
+// right of the test point.
 func pointInPolygon(r, c float64, tiles []Tile) bool {
 	inside := false
 	for e0, e1 := range loopPairs(tiles) {
@@ -112,21 +128,6 @@ func pointInPolygon(r, c float64, tiles []Tile) bool {
 	return inside
 }
 
-func rectInPolygon(minR, maxR, minC, maxC int, tiles []Tile) bool {
-	if minR == maxR && minC == maxC {
-		return true
-	}
-	if minR == maxR {
-		return pointInPolygon(float64(minR)+0.5, float64(minC)+0.5, tiles) ||
-			pointInPolygon(float64(minR)-0.5, float64(minC)+0.5, tiles)
-	}
-	if minC == maxC {
-		return pointInPolygon(float64(minR)+0.5, float64(minC)+0.5, tiles) ||
-			pointInPolygon(float64(minR)+0.5, float64(minC)-0.5, tiles)
-	}
-	return pointInPolygon(float64(minR)+0.5, float64(minC)+0.5, tiles)
-}
-
 func part2(t *testing.T, in string) (ret int) {
 	input := parseInput(t, in)
 
@@ -135,12 +136,23 @@ func part2(t *testing.T, in string) (ret int) {
 		for _, t1 := range input.Tiles[i+1:] {
 			minR, maxR := min(t0.R, t1.R), max(t0.R, t1.R)
 			minC, maxC := min(t0.C, t1.C), max(t0.C, t1.C)
+
+			// 1. Ensure no polygon boundary edge enters the interior of the rectangle.
+			// Because rectangles are convex, any exterior void or cavity inside the bounding
+			// box must be bounded by edges that cut into this region.
 			for e0, e1 := range loopPairs(input.Tiles) {
 				if edgePiercesRect(minR, maxR, minC, maxC, e0, e1) {
 					continue nextTile
 				}
 			}
-			if rectInPolygon(minR, maxR, minC, maxC, input.Tiles) {
+
+			// 2. Ensure the rectangle is inside the polygon (and not in an exterior void).
+			// We sample the continuous midpoint. A tiny epsilon offset ensures non-integer
+			// ray coordinates, eliminating collinear ray / vertex intersection singularities.
+			const eps = 1e-4
+			midR := float64(minR+maxR)/2.0 + eps
+			midC := float64(minC+maxC)/2.0 + eps
+			if pointInPolygon(midR, midC, input.Tiles) {
 				area := (maxR - minR + 1) * (maxC - minC + 1)
 				if area > ret {
 					ret = area
