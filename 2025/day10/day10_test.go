@@ -17,7 +17,6 @@ package aocday
 
 import (
 	"bufio"
-	"container/heap"
 	_ "embed"
 	"fmt"
 	"math"
@@ -295,67 +294,154 @@ func (h *trackedStateHeap) Pop() any {
 }
 
 func part2machine(input Machine) int {
-	initialRemaining := sum(input.DesiredJoltages)
-	stateHeap := &trackedStateHeap{{
-		CurrentJoltages:  make([]int, input.Pattern.Length),
-		ButtonsPressed:   0,
-		RemainingJoltage: initialRemaining,
-	}}
-	heap.Init(stateHeap)
+	numEquations := input.Pattern.Length
+	numVars := len(input.Buttons)
 
-	// Visited map: key is string representation of joltages, value is min ButtonsPressed seen
-	visited := make(map[string]int)
-
-	numButtons := len(input.Buttons)
-	maxMask := uint32(1) << numButtons
-
-	for stateHeap.Len() > 0 {
-		curr := heap.Pop(stateHeap).(trackedState)
-		// fmt.Printf("%#v\n", curr)
-
-		if curr.RemainingJoltage == 0 {
-			return curr.ButtonsPressed
+	// Build augmented matrix: [A | b]
+	// Matrix has numEquations rows and (numVars + 1) columns.
+	mat := make([][]float64, numEquations)
+	for i := 0; i < numEquations; i++ {
+		mat[i] = make([]float64, numVars+1)
+		for j, btn := range input.Buttons {
+			if (btn.Bits & (1 << i)) != 0 {
+				mat[i][j] = 1.0
+			}
 		}
+		mat[i][numVars] = float64(input.DesiredJoltages[i])
+	}
 
-		key := fmt.Sprint(curr.CurrentJoltages) // has []s and commas, so no boundary issues
-		if best, ok := visited[key]; ok && best <= curr.ButtonsPressed {
+	// Gaussian elimination to Reduced Row Echelon Form (RREF)
+	pivotRow := 0
+	pivotCols := make([]int, 0)
+	varColIsPivot := make([]bool, numVars)
+
+	const eps = 1e-9
+
+	for col := 0; col < numVars && pivotRow < numEquations; col++ {
+		// Find pivot
+		sel := -1
+		for r := pivotRow; r < numEquations; r++ {
+			if math.Abs(mat[r][col]) > eps {
+				sel = r
+				break
+			}
+		}
+		if sel == -1 {
 			continue
 		}
-		visited[key] = curr.ButtonsPressed
 
-		// Loop through each combination of 1 or more button presses
-		for mask := uint32(1); mask < maxMask; mask++ {
-			nextJoltages := addJoltageFromButton(curr.CurrentJoltages, input.Buttons, mask)
+		// Swap rows
+		mat[pivotRow], mat[sel] = mat[sel], mat[pivotRow]
 
-			// Prune if any joltage exceeds the target
-			exceeded := false
-			rem := 0
-			for i, target := range input.DesiredJoltages {
-				if nextJoltages[i] > target {
-					exceeded = true
-					break
+		// Normalize pivot row
+		div := mat[pivotRow][col]
+		for c := col; c <= numVars; c++ {
+			mat[pivotRow][c] /= div
+		}
+
+		// Eliminate all other rows in this column
+		for r := 0; r < numEquations; r++ {
+			if r != pivotRow && math.Abs(mat[r][col]) > eps {
+				factor := mat[r][col]
+				for c := col; c <= numVars; c++ {
+					mat[r][c] -= factor * mat[pivotRow][c]
 				}
-				rem += target - nextJoltages[i]
 			}
-			if exceeded {
-				continue
-			}
+		}
 
-			nextPresses := curr.ButtonsPressed + bits.OnesCount32(mask)
-			nextKey := fmt.Sprint(nextJoltages)
-			if best, ok := visited[nextKey]; ok && best <= nextPresses {
-				continue
-			}
+		pivotCols = append(pivotCols, col)
+		varColIsPivot[col] = true
+		pivotRow++
+	}
 
-			heap.Push(stateHeap, trackedState{
-				CurrentJoltages:  nextJoltages,
-				ButtonsPressed:   nextPresses,
-				RemainingJoltage: rem,
-			})
+	// Check for contradictory rows (0 = non-zero)
+	for r := pivotRow; r < numEquations; r++ {
+		if math.Abs(mat[r][numVars]) > eps {
+			return math.MaxInt // No solution
 		}
 	}
 
-	return math.MaxInt
+	// Identify free variables
+	var freeCols []int
+	for col := 0; col < numVars; col++ {
+		if !varColIsPivot[col] {
+			freeCols = append(freeCols, col)
+		}
+	}
+
+	// Upper bounds for free variables: cannot exceed min desired joltage for the lights it toggles
+	freeBounds := make([]int, len(freeCols))
+	for idx, fcol := range freeCols {
+		bound := math.MaxInt
+		btn := input.Buttons[fcol]
+		for b := 0; b < btn.Length; b++ {
+			if (btn.Bits & (1 << b)) != 0 {
+				if input.DesiredJoltages[b] < bound {
+					bound = input.DesiredJoltages[b]
+				}
+			}
+		}
+		if bound == math.MaxInt {
+			bound = 0
+		}
+		freeBounds[idx] = bound
+	}
+
+	minTotalPresses := math.MaxInt
+
+	// Search all combinations of values for the free variables
+	var searchFree func(freeIdx int, currentFreeVals []int)
+	searchFree = func(freeIdx int, currentFreeVals []int) {
+		if freeIdx == len(freeCols) {
+			// Compute pivot variable values
+			x := make([]int, numVars)
+			for i, fcol := range freeCols {
+				x[fcol] = currentFreeVals[i]
+			}
+
+			valid := true
+			for r, pcol := range pivotCols {
+				val := mat[r][numVars]
+				for i, fcol := range freeCols {
+					val -= mat[r][fcol] * float64(currentFreeVals[i])
+				}
+				roundVal := math.Round(val)
+				if math.Abs(val-roundVal) > 1e-5 || roundVal < -eps {
+					valid = false
+					break
+				}
+				x[pcol] = int(roundVal)
+			}
+
+			if valid {
+				total := 0
+				for _, presses := range x {
+					total += presses
+				}
+				if total < minTotalPresses {
+					minTotalPresses = total
+				}
+			}
+			return
+		}
+
+		for val := 0; val <= freeBounds[freeIdx]; val++ {
+			// Pruning: if current free variable presses already exceed the minimum found
+			currentSum := val
+			for _, v := range currentFreeVals {
+				currentSum += v
+			}
+			if currentSum >= minTotalPresses {
+				break
+			}
+
+			searchFree(freeIdx+1, append(currentFreeVals, val))
+		}
+	}
+
+	searchFree(0, nil)
+
+	return minTotalPresses
 }
 
 func TestPart2(t *testing.T) {
@@ -365,7 +451,7 @@ func TestPart2(t *testing.T) {
 		want int
 	}{
 		{"part2 example 0", "[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}\n[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}\n[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}", 33},
-		// {"part2 answer", inputFile, -1},
+		{"part2 answer", inputFile, 20709},
 	}
 
 	for _, test := range tests {
