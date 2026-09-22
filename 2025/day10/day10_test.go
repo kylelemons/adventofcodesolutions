@@ -17,6 +17,7 @@ package aocday
 
 import (
 	"bufio"
+	"container/heap"
 	_ "embed"
 	"fmt"
 	"math"
@@ -31,6 +32,8 @@ var _ = fmt.Println // keep imported
 type Machine struct {
 	Pattern Lights
 	Buttons []Lights
+
+	DesiredJoltages []int
 }
 
 type Input struct {
@@ -98,6 +101,23 @@ func input2button(input string, length int) Lights {
 	}
 }
 
+// input2joltage parses brace-enclosed comma-separated integers (e.g., "{1,2,3,4}") into an []int.
+func input2joltage(input string) []int {
+	s := strings.Trim(input, "{} \t\r\n")
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	res := make([]int, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if v, err := strconv.Atoi(part); err == nil {
+			res = append(res, v)
+		}
+	}
+	return res
+}
+
 // setFromXor returns the XOR combination of lights a and b.
 func setFromXor(a, b Lights) Lights {
 	return Lights{
@@ -138,6 +158,7 @@ func parseInput(t *testing.T, in string) *Input {
 	for lines.Scan() {
 		words := strings.Split(lines.Text(), " ")
 		patRaw, words := words[0], words[1:]
+		desJoltRaw := words[len(words)-1]
 		words = words[:len(words)-1] // take off joltage
 
 		pat := input2pattern(patRaw)
@@ -145,13 +166,15 @@ func parseInput(t *testing.T, in string) *Input {
 		for i := range buttons {
 			buttons[i] = input2button(words[i], pat.Length)
 		}
+		desired := input2joltage(desJoltRaw)
 
 		// fmt.Println("pat", patRaw, "words", words)
-		// fmt.Println("pat", pat, "buttons", buttons)
+		// fmt.Println("pat", pat, "buttons", buttons, "joltage", desired)
 
 		input.Machines = append(input.Machines, Machine{
-			Pattern: pat,
-			Buttons: buttons,
+			Pattern:         pat,
+			Buttons:         buttons,
+			DesiredJoltages: desired,
 		})
 	}
 	return input
@@ -198,6 +221,157 @@ func TestPart1(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			if got, want := part1(t, test.in), test.want; got != want {
 				t.Errorf("part1(%#v)\n = %#v, want %#v", test.in, got, want)
+			}
+		})
+	}
+}
+
+func part2(t *testing.T, in string) (ret int) {
+	input := parseInput(t, in)
+	_ = input
+
+	for _, input := range input.Machines {
+		ret += part2machine(input)
+	}
+
+	return
+}
+
+func sum(joltages []int) int {
+	total := 0
+	for _, v := range joltages {
+		total += v
+	}
+	return total
+}
+
+// addJoltageFromButton clones joltages and increments each position toggled
+// by the buttons specified in mask.
+func addJoltageFromButton(joltages []int, buttons []Lights, mask uint32) []int {
+	next := make([]int, len(joltages))
+	copy(next, joltages)
+
+	for i, btn := range buttons {
+		if (mask & (1 << i)) != 0 { // if the button is pressed based on the mask
+			for b := 0; b < btn.Length; b++ {
+				if (btn.Bits & (1 << b)) != 0 { // if the mask says to increase this joltage
+					next[b]++
+				}
+			}
+		}
+	}
+	return next
+}
+
+type trackedState struct {
+	CurrentJoltages  []int
+	ButtonsPressed   int
+	RemainingJoltage int
+}
+
+type trackedStateHeap []trackedState
+
+func (h trackedStateHeap) Len() int { return len(h) }
+func (h trackedStateHeap) Less(i, j int) bool {
+	// Primary: fewest buttons pressed (guarantees shortest path / min presses)
+	if h[i].ButtonsPressed != h[j].ButtonsPressed {
+		return h[i].ButtonsPressed < h[j].ButtonsPressed
+	}
+	// Tie-breaker: lowest remaining joltage (closest to goal)
+	return h[i].RemainingJoltage < h[j].RemainingJoltage
+}
+func (h trackedStateHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+
+func (h *trackedStateHeap) Push(x any) {
+	*h = append(*h, x.(trackedState))
+}
+
+func (h *trackedStateHeap) Pop() any {
+	old := *h
+	n := len(old)
+	item := old[n-1]
+	*h = old[0 : n-1]
+	return item
+}
+
+func part2machine(input Machine) int {
+	initialRemaining := sum(input.DesiredJoltages)
+	stateHeap := &trackedStateHeap{{
+		CurrentJoltages:  make([]int, input.Pattern.Length),
+		ButtonsPressed:   0,
+		RemainingJoltage: initialRemaining,
+	}}
+	heap.Init(stateHeap)
+
+	// Visited map: key is string representation of joltages, value is min ButtonsPressed seen
+	visited := make(map[string]int)
+
+	numButtons := len(input.Buttons)
+	maxMask := uint32(1) << numButtons
+
+	for stateHeap.Len() > 0 {
+		curr := heap.Pop(stateHeap).(trackedState)
+		// fmt.Printf("%#v\n", curr)
+
+		if curr.RemainingJoltage == 0 {
+			return curr.ButtonsPressed
+		}
+
+		key := fmt.Sprint(curr.CurrentJoltages) // has []s and commas, so no boundary issues
+		if best, ok := visited[key]; ok && best <= curr.ButtonsPressed {
+			continue
+		}
+		visited[key] = curr.ButtonsPressed
+
+		// Loop through each combination of 1 or more button presses
+		for mask := uint32(1); mask < maxMask; mask++ {
+			nextJoltages := addJoltageFromButton(curr.CurrentJoltages, input.Buttons, mask)
+
+			// Prune if any joltage exceeds the target
+			exceeded := false
+			rem := 0
+			for i, target := range input.DesiredJoltages {
+				if nextJoltages[i] > target {
+					exceeded = true
+					break
+				}
+				rem += target - nextJoltages[i]
+			}
+			if exceeded {
+				continue
+			}
+
+			nextPresses := curr.ButtonsPressed + bits.OnesCount32(mask)
+			nextKey := fmt.Sprint(nextJoltages)
+			if best, ok := visited[nextKey]; ok && best <= nextPresses {
+				continue
+			}
+
+			heap.Push(stateHeap, trackedState{
+				CurrentJoltages:  nextJoltages,
+				ButtonsPressed:   nextPresses,
+				RemainingJoltage: rem,
+			})
+		}
+	}
+
+	return math.MaxInt
+}
+
+func TestPart2(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want int
+	}{
+		{"part2 example 0", "[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}\n[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}\n[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}", 33},
+		// {"part2 answer", inputFile, -1},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got, want := part2(t, test.in), test.want; got != want {
+				t.Errorf("part2(...)\n = %#v, want %#v", got, want)
 			}
 		})
 	}
